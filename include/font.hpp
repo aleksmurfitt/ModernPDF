@@ -1,28 +1,20 @@
 #if !defined(PDFLIB_FONT_H)
-#    define PDFLIB_FONT_H
-#    include "face.hpp"
-#    include "private/font-tables/parser.hpp"
-#    include "private/harfbuzz-helpers.hpp"
-#    include "private/types/font.hpp"
-#    include "unicode/locid.h"
-#    include "unicode/uchar.h"
-#    include "unicode/ucnv.h"
-#    include "unicode/unistr.h"
-#    include "unicode/ustring.h"
-#    include "unicode/utypes.h"
+    #define PDFLIB_FONT_H
+    #include "face.hpp"
+    #include "private/font-tables/parser.hpp"
+    #include "private/harfbuzz-helpers.hpp"
+    #include "private/types/font.hpp"
 
-#    include <hb-ot.h>
-#    include <hb.h>
-#    include <qpdf/Buffer.hh>
-#    include <qpdf/QPDFObjectHandle.hh>
-#    include <qpdf/QUtil.hh>
+    #include <hb-ot.h>
+    #include <hb.h>
+    #include <qpdf/Buffer.hh>
+    #include <qpdf/QPDFObjectHandle.hh>
+    #include <qpdf/QUtil.hh>
 
-#    include <climits>
-#    include <codecvt>
-#    include <filesystem>
-#    include <locale>
-#    include <string_view>
-#    include <vector>
+    #include <climits>
+    #include <filesystem>
+    #include <string_view>
+    #include <vector>
 
 namespace PDFLib {
 class FontManager;
@@ -32,7 +24,7 @@ class Font {
     FontHolder font;
     std::vector<Face> faces;
     FontManager &manager;
-
+    const size_t index;
     class HeadTable {
         static constexpr uint32_t Tag = 1751474532;
         FontTableParser parser;
@@ -762,11 +754,11 @@ class Font {
         const Record get(RecordType type) const {
             return records.at(type);
         }
-        
+
     } nameTable;
 
   public:
-    Font(HbFontT *fontHandle, FontManager &manager);
+    Font(HbFontT *fontHandle, FontManager &manager, size_t index);
 
     HbFontT *getHbObj() {
         return font;
@@ -842,12 +834,6 @@ class Font {
 
     FontManager &getManager() {
         return manager;
-    }
-
-    void embedFaces() {
-        for (auto &&face : faces) {
-            face.embed(hb_face_reference_blob(font));
-        }
     }
 };
 } // namespace PDFLib

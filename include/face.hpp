@@ -21,14 +21,15 @@ class Document;
 
 class Face {
     SubsetInputHolder subsetInput;
-    GlyphSetHolder<false> glyphSet;
+    UnicodeSetHolder<false> glyphSet;
     FaceHolder face;
     Font &font;
     QPDFObjectHandle descriptor;
     QPDFObjectHandle dictionary;
+    const std::string handle;
 
   public:
-    Face(HbFaceT *faceHandle, Font &font);
+    Face(HbFaceT *faceHandle, Font &font, std::string handle);
 
     int getAscender();
     int getDescender();
@@ -41,12 +42,19 @@ class Face {
         return hb_style_get_value(face, HB_STYLE_TAG_WEIGHT);
     }
 
+    const std::string &getHandle() {
+        return handle;
+    }
+
     float getSlantAngle() {
         return hb_style_get_value(face, HB_STYLE_TAG_SLANT_ANGLE);
     }
 
     QPDFObjectHandle &getDictionary() {
         return dictionary;
+    }
+    QPDFObjectHandle &getDescriptor() {
+        return descriptor;
     }
 };
 } // namespace PDFLib

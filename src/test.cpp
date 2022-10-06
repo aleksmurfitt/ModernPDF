@@ -1,4 +1,3 @@
-#include "fonts.hpp"
 #include "pdf.hpp"
 
 #include <algorithm>
@@ -23,12 +22,13 @@ constexpr auto timer = [](auto &&func, auto &&...params) -> std::chrono::duratio
 inline void test() {
     Document d{};
     d.makeFontTest();
+    d.makePageTest();
     d.write("/Users/aleks/workbench/C++/pdf-generator v2/test.pdf");
 }
 
 int main() {
     std::vector<double> times;
-    for (size_t i = 0; i < 20; i++) {
+    for (size_t i = 0; i < 1; i++) {
         /* code */
         times.push_back(timer(test).count());
     }

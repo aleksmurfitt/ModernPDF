@@ -1,5 +1,5 @@
 set(TARGET epdf)
-add_executable(${TARGET} test.cpp face.cpp font.cpp)
+add_executable(${TARGET} test.cpp face.cpp font.cpp fontManager.cpp)
 target_compile_features(${TARGET} PRIVATE cxx_std_20)
 target_link_libraries(${TARGET} PUBLIC ${LIBS} qpdf::libqpdf)
 target_compile_options(${TARGET} PUBLIC ${CFLAGS})

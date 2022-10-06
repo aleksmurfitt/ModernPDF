@@ -1,22 +1,23 @@
 #include "face.hpp"
 #include "font.hpp"
-#include "fonts.hpp"
+#include "fontManager.hpp"
 #include "pdf.hpp"
 
 #include <iostream>
 
-PDFLib::Face::Face(HbFaceT *faceHandle, Font &font)
+PDFLib::Face::Face(HbFaceT *faceHandle, Font &font, std::string handle)
     : glyphSet{subsetInput},
       face{faceHandle},
       font{font},
-      dictionary{font.getManager().getDocument().makeIndirectObject("<<"
-                                                                    " /Type /Font"
-                                                                    " /Subtype /TrueType"
-                                                                    " /Encoding /WinAnsiEncoding"
-                                                                    ">>"_qpdf)},
-      descriptor{font.getManager().getDocument().makeIndirectObject("<<"
-                                                                    " /Type /FontDescriptor"
-                                                                    ">>"_qpdf)} {
+      dictionary{("<<"
+                  " /Type /Font"
+                  " /Subtype /TrueType"
+                  " /Encoding /WinAnsiEncoding"
+                  ">>"_qpdf)},
+      descriptor{("<<"
+                  " /Type /FontDescriptor"
+                  ">>"_qpdf)},
+      handle{handle} {
     descriptor.replaceKey("/FontBBox", font.getBoundingBox());
     descriptor.replaceKey("/FontName", QPDFObjectHandle::newName("/" + std::string(font.getPostScriptName())));
     descriptor.replaceKey("/ItalicAngle", QPDFObjectHandle::newReal(getSlantAngle(), 1));
@@ -27,18 +28,7 @@ PDFLib::Face::Face(HbFaceT *faceHandle, Font &font)
     descriptor.replaceKey("/StemV", QPDFObjectHandle::newInteger(10 + (getWeight() - 50) * 220 / 900));
 
     dictionary.replaceKey("/BaseFont", QPDFObjectHandle::newName("/" + std::string(font.getPostScriptName())));
-    dictionary.replaceKey("/FirstChar", QPDFObjectHandle::newInteger(0));
-    dictionary.replaceKey("/LastChar", QPDFObjectHandle::newInteger(font.getLastCharIndex()));
-    std::vector<QPDFObjectHandle> glyphAdvances;
-    for (size_t i = 0; i <= font.getLastCharIndex(); ++i) {
-        hb_codepoint_t glyph;
-        hb_font_get_glyph(face, i, 0, &glyph);
-        glyphAdvances.push_back(
-            QPDFObjectHandle::newInteger(hb_font_get_glyph_h_advance(face, glyph) * font.getScale()));
-    }
-    dictionary.replaceKey("/Widths", QPDFObjectHandle::newArray(glyphAdvances));
     dictionary.replaceKey("/FontDescriptor", descriptor);
-    font.getManager().addDictionaryEntry(dictionary);
 };
 
 void PDFLib::Face::embed(HbBlobT *blob) {
@@ -46,6 +36,19 @@ void PDFLib::Face::embed(HbBlobT *blob) {
 
     FontHolder newFont{hb_subset_or_fail(font.getHbObj(), subsetInput)};
 
+    dictionary.replaceKey("/FirstChar", QPDFObjectHandle::newInteger(hb_set_get_min(glyphSet)));
+    dictionary.replaceKey("/LastChar", QPDFObjectHandle::newInteger(hb_set_get_max(glyphSet)));
+    std::vector<QPDFObjectHandle> glyphAdvances;
+    for (size_t i = hb_set_get_min(glyphSet); i <= hb_set_get_max(glyphSet); ++i) {
+        hb_codepoint_t codepoint = 0;
+        if (hb_set_has(glyphSet, i))
+            codepoint = i;
+        hb_codepoint_t glyph;
+        hb_font_get_glyph(face, codepoint, 0, &glyph);
+        glyphAdvances.push_back(
+            QPDFObjectHandle::newInteger(hb_font_get_glyph_h_advance(face, glyph) * font.getScale()));
+    }
+    dictionary.replaceKey("/Widths", QPDFObjectHandle::newArray(glyphAdvances));
     unsigned int length;
     auto data =
         std::make_shared<Buffer>((unsigned char *)(hb_blob_get_data(hb_face_reference_blob(newFont), &length)), length);
@@ -98,12 +101,12 @@ std::pair<int, std::string> PDFLib::Face::shape(std::string text, float points) 
         hb_codepoint_t glyphid = glyph_info[i].codepoint;
         hb_position_t x_advance = glyph_pos[i].x_advance;
         hb_position_t error = hb_font_get_glyph_h_advance(face, glyphid) - x_advance;
-        hb_set_add(glyphSet, glyphid);
+        hb_set_add(glyphSet, text[i]);
         width += x_advance;
         out.push_back(text[i]);
         if (error) {
             out.push_back(')');
-            out += std::to_string(error);
+            out += std::to_string(error * font.getScale());
             out.push_back('(');
         }
     }

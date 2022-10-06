@@ -46,7 +46,7 @@ class FontManager {
         std::vector<std::string> out;
         out.reserve(fontCount);
         for (size_t i = 0; i < fontCount; ++i) {
-            auto font = Font(hb_face_create(blob, i), *this);
+            auto font = Font(hb_face_create(blob, i), *this, fonts.size());
             auto name = font.getName();
             fonts.emplace(std::make_pair(name, std::move(font)));
             out.emplace_back(name);
@@ -58,16 +58,7 @@ class FontManager {
         return document;
     }
 
-    void embedFonts() {
-        for (auto &&[key, font] : fonts) {
-            font.embedFaces();
-        }
-    }
-
-    void addDictionaryEntry(QPDFObjectHandle &fontDictionary) {
-        dictionary.replaceKey("/F" + std::to_string(dictionaryEntries), fontDictionary);
-        dictionaryEntries++;
-    }
+    void embedFonts();
 
     QPDFObjectHandle &getDictionary() {
         return dictionary;
