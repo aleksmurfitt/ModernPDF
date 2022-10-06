@@ -1,0 +1,6 @@
+set(TARGET epdf)
+add_executable(${TARGET} test.cpp face.cpp font.cpp)
+target_compile_features(${TARGET} PRIVATE cxx_std_20)
+target_link_libraries(${TARGET} PUBLIC ${LIBS} qpdf::libqpdf)
+target_compile_options(${TARGET} PUBLIC ${CFLAGS})
+target_include_directories(${TARGET} PUBLIC ${PROJECT_SOURCE_DIR}/include ${INCLUDE_DIRS})

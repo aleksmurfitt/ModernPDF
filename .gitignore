@@ -1,0 +1,7 @@
+fonts/**
+test.pdf
+Doxyfile
+build/**
+.vscode/**
+
+.DS_Store
