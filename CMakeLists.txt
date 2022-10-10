@@ -1,5 +1,8 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.12...3.24)
 
+if(${CMAKE_VERSION} VERSION_LESS 3.19)
+    cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
+endif()
 project(PDF-Generator VERSION 1.0
                   DESCRIPTION "Component to generate Thirdfort PDFs"
                   LANGUAGES CXX)
@@ -12,7 +15,8 @@ set(APK_PACKAGES
 set(BREW_PACKAGES
     pkg-config
     icu4c
-    harfbuzz)
+    harfbuzz
+    -)
 
 # Required dynamic libraries
 set(PKG_CONF_MODS
@@ -37,6 +41,7 @@ FetchSubmodules(SUB_MODS SUB_MOD_DIR)
 find_package(qpdf REQUIRED)
 
 add_subdirectory(src)
+add_subdirectory(examples)
 
 if("${IS_DOCKER}")
     message("Installing binaries...")

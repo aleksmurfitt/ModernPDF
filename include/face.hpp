@@ -21,7 +21,9 @@ class Document;
 
 class Face {
     SubsetInputHolder subsetInput;
-    UnicodeSetHolder<false> glyphSet;
+    std::optional<BlobHolder> subsetBlob;
+    std::optional<FontHolder> subsetFont;
+    UnicodeSetHolder glyphSet;
     FaceHolder face;
     Font &font;
     QPDFObjectHandle descriptor;

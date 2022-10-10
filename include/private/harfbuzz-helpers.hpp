@@ -13,47 +13,44 @@ using HbBlobT = hb_blob_t;
 using HbBufferT = hb_buffer_t;
 using HbSetT = hb_set_t;
 using HbSubsetInputT = hb_subset_input_t;
+struct nullarg_t { };
+inline constexpr nullarg_t nullarg;
+template <auto arg> inline constexpr bool is_nullarg_v = std::is_same_v<std::remove_cv_t<decltype(arg)>, nullarg_t>;
 
-template <typename T, auto deleter, typename U = std::nullptr_t, auto initialiser = nullptr, bool owning = true>
-class HbHolder {
-    static constexpr auto HbDestroyer = [](T *ptr) {
-        if constexpr (owning)
-            deleter(ptr);
-    };
-    using SafeT = std::unique_ptr<T, decltype(HbDestroyer)>;
+template <typename T, auto deleter = nullarg, auto initialiser = nullarg> class PtrHolder {
+    using SafeT = std::unique_ptr<T, decltype([](T *ptr) {
+                                      if constexpr (!is_nullarg_v<deleter>)
+                                          deleter(ptr);
+                                  })>;
     SafeT object;
 
-    static constexpr auto Init = [](U object) -> auto{
-        if constexpr (std::is_same_v<decltype(initialiser), std::nullptr_t>)
-            return object;
-        else if constexpr (!std::is_same_v<U, std::nullptr_t>)
-            return initialiser(object);
-    };
-
   public:
-    template <typename W = U, typename std::enable_if<!std::is_same_v<W, std::nullptr_t>, int>::type = 0>
-    HbHolder(U object) : object{Init(object)} {};
+    // Basically a std::make_unique for C functions
+    // Enable if initialiser is set
+    template <auto W = initialiser, typename std::enable_if<!is_nullarg_v<W>, int>::type = 0>
+    PtrHolder(auto &&...args) : object{initialiser(std::forward<decltype(args)>(args)...)} {};
 
-    template <typename W = U, typename std::enable_if<std::is_same_v<W, std::nullptr_t>, int>::type = 0>
-    HbHolder() : object{initialiser()} {};
+    PtrHolder(T *object) : object{object} {};
+    // PtrHolder(){};
 
     operator T *() {
         return object.get();
     }
 };
 
-using FaceHolder = HbHolder<HbFaceT, hb_font_destroy, HbFaceT *>;
-using FontHolder = HbHolder<HbFontT, hb_face_destroy, HbFontT *>;
-using BlobHolder = HbHolder<HbBlobT, hb_blob_destroy, std::filesystem::path,
-                            ([](auto fontFile) -> auto{ return hb_blob_create_from_file(fontFile.c_str()); })>;
-using BufferHolder = HbHolder<HbBufferT, hb_buffer_destroy, std::nullptr_t, hb_buffer_create>;
-template <bool owning = true>
-using GlyphSetHolder = HbHolder<HbSetT, hb_set_destroy, HbSubsetInputT *, hb_subset_input_glyph_set, owning>;
-template <bool owning = true>
-using UnicodeSetHolder = HbHolder<HbSetT, hb_set_destroy, HbSubsetInputT *, hb_subset_input_unicode_set, owning>;
+using FaceHolder = PtrHolder<HbFaceT, hb_font_destroy>;
+using FontHolder = PtrHolder<HbFontT, hb_face_destroy>;
+using BlobHolder =
+    PtrHolder<HbBlobT, hb_blob_destroy,
+              ([](std::filesystem::path fontFile) -> auto{ return hb_blob_create_from_file(fontFile.c_str()); })>;
+using BufferHolder = PtrHolder<HbBufferT, hb_buffer_destroy, hb_buffer_create>;
 
-using SubsetInputHolder =
-    HbHolder<HbSubsetInputT, hb_subset_input_destroy, std::nullptr_t, hb_subset_input_create_or_fail>;
+using GlyphSetHolder = PtrHolder<HbSetT, nullarg, hb_subset_input_glyph_set>;
+using UnicodeSetHolder = PtrHolder<HbSetT, nullarg, hb_subset_input_unicode_set>;
+
+using SetHolder = PtrHolder<HbSetT, hb_set_destroy, hb_set_create>;
+
+using SubsetInputHolder = PtrHolder<HbSubsetInputT, hb_subset_input_destroy, hb_subset_input_create_or_fail>;
 
 } // namespace PDFLib
 

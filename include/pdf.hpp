@@ -1,3 +1,5 @@
+#define POINTERHOLDER_TRANSITION 3
+
 #if !defined(PDFLIB_DOCUMENT_H)
     #define PDFLIB_DOCUMENT_H
     #include "fontManager.hpp"
@@ -35,7 +37,7 @@ class Document {
         std::filesystem::path fontDir("/Users/aleks/workbench/C++/pdf-generator v2/fonts");
 
         for (auto &&file : std::filesystem::directory_iterator(fontDir)) {
-            if (file.path().stem().generic_string().find("Gilroy") == std::string::npos)
+            if (std::set<std::string>({".ttf", ".ttc", ".otf"}).contains(file.path().extension()))
                 fontManager.loadFontFile(file);
         }
 

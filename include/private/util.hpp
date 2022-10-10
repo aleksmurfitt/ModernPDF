@@ -1,32 +1,30 @@
 #if !defined(PDFLIB_UTIL_H)
-#    define PDFLIB_UTIL_H
-#    include <algorithm>
-#    include <numeric>
-#    include <vector>
+    #define PDFLIB_UTIL_H
+    #include <memory>
 
 namespace PDFLib {
-size_t levenshteinDistance(std::string_view s1, std::string_view s2) {
-    const size_t m = s1.size();
-    const size_t n = s2.size();
-    if (m == 0) return n;
-    if (n == 0) return m;
-    std::vector<size_t> costs(n + 1);
-    std::iota(costs.begin(), costs.end(), 0);
-    size_t i = 0;
-    for (auto c1 : s1) {
-        costs[0] = i + 1;
-        size_t corner = i;
-        size_t j = 0;
-        for (auto c2 : s2) {
-            size_t upper = costs[j + 1];
-            costs[j + 1] = (c1 == c2) ? corner : 1 + std::min(std::min(upper, corner), costs[j]);
-            corner = upper;
-            ++j;
-        }
-        ++i;
+namespace Util {
+template <typename T, auto deleter, auto initialiser = nullptr, bool owning = true> class PtrHolder {
+    using SafeT = std::unique_ptr<T, decltype([](T *ptr) {
+                                      if constexpr (owning)
+                                          deleter(ptr);
+                                  })>;
+    SafeT object;
+
+  public:
+    // Basically a std::make_unique for C functions
+    // Enable if initialiser is set
+    template <auto W = initialiser,
+              typename std::enable_if<!std::is_same_v<decltype(W), std::nullptr_t>, int>::type = 0>
+    PtrHolder(auto &&...args) : object{initialiser(std::forward<decltype(args)>(args)...)} {};
+
+    PtrHolder(T *object) : object{object} {};
+
+    operator T *() {
+        return object.get();
     }
-    return costs[n];
-}
+};
+} // namespace Util
 } // namespace PDFLib
 
 #endif // PDFLIB_UTIL_H

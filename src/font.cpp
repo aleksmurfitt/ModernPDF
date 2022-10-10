@@ -1,3 +1,4 @@
+#define POINTERHOLDER_TRANSITION 3
 #include "font.hpp"
 #include "fontManager.hpp"
 #include "pdf.hpp"

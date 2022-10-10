@@ -27,12 +27,13 @@ inline void test() {
 }
 
 int main() {
-    std::vector<double> times;
-    for (size_t i = 0; i < 1; i++) {
-        /* code */
-        times.push_back(timer(test).count());
+    using namespace std::chrono_literals;
+    std::array<double, 100> times;
+    for (size_t i = 0; i < 100; i++) {
+        times[i] = timer(test).count();
     }
-    std::cout << *std::min_element(std::begin(times), std::end(times)) << std::endl;
-    std::cout << std::reduce(std::begin(times), std::end(times)) / times.size() << std::endl;
+    std::cout << "Min: " << *std::min_element(std::begin(times), std::end(times)) << "ms" << std::endl;
+    std::cout << "Avg: " << std::reduce(std::begin(times), std::end(times)) / times.size() << "ms" << std::endl;
+    std::cout << times.size() << " runs" << std::endl;
     return 0;
 };

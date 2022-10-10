@@ -1,3 +1,4 @@
+#define POINTERHOLDER_TRANSITION 3
 #include "face.hpp"
 #include "font.hpp"
 #include "fontManager.hpp"
@@ -33,8 +34,8 @@ PDFLib::Face::Face(HbFaceT *faceHandle, Font &font, std::string handle)
 
 void PDFLib::Face::embed(HbBlobT *blob) {
     hb_subset_input_set_flags(subsetInput, HB_SUBSET_FLAGS_GLYPH_NAMES);
-
-    FontHolder newFont{hb_subset_or_fail(font.getHbObj(), subsetInput)};
+    subsetFont = hb_subset_or_fail(font.getHbObj(), subsetInput);
+    subsetBlob = hb_face_reference_blob(*subsetFont);
 
     dictionary.replaceKey("/FirstChar", QPDFObjectHandle::newInteger(hb_set_get_min(glyphSet)));
     dictionary.replaceKey("/LastChar", QPDFObjectHandle::newInteger(hb_set_get_max(glyphSet)));
@@ -50,8 +51,8 @@ void PDFLib::Face::embed(HbBlobT *blob) {
     }
     dictionary.replaceKey("/Widths", QPDFObjectHandle::newArray(glyphAdvances));
     unsigned int length;
-    auto data =
-        std::make_shared<Buffer>((unsigned char *)(hb_blob_get_data(hb_face_reference_blob(newFont), &length)), length);
+
+    auto data = std::make_shared<Buffer>((unsigned char *)(hb_blob_get_data(*subsetBlob, &length)), length);
     auto stream = QPDFObjectHandle::newStream(&font.getManager().getDocument().pdf);
     stream.replaceStreamData(data, QPDFObjectHandle(), QPDFObjectHandle::newNull());
     auto dict = stream.getDict();
@@ -106,7 +107,7 @@ std::pair<int, std::string> PDFLib::Face::shape(std::string text, float points) 
         out.push_back(text[i]);
         if (error) {
             out.push_back(')');
-            out += std::to_string(error * font.getScale());
+            out += std::to_string((int32_t)(error * font.getScale()));
             out.push_back('(');
         }
     }
