@@ -31,7 +31,6 @@ template <typename T, auto deleter = nullarg, auto initialiser = nullarg> class 
     PtrHolder(auto &&...args) : object{initialiser(std::forward<decltype(args)>(args)...)} {};
 
     PtrHolder(T *object) : object{object} {};
-    // PtrHolder(){};
 
     operator T *() {
         return object.get();

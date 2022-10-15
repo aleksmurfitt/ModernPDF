@@ -2,19 +2,19 @@ function(ConfigurePlatform DevelopmentList DockerList PackageList)
     if("${IS_DOCKER}")
         message("-- Running in Docker")
         add_definitions(-DDOCKER)
-        set(PKG_INSTALL_CMD "apk" "add" PARENT_SCOPE)
-        set(PKG_MANAGER "apk" PARENT_SCOPE)
+        set(PKG_INSTALL_CMD apk add PARENT_SCOPE)
+        set(PKG_MANAGER apk PARENT_SCOPE)
         set(CAN_INSTALL TRUE PARENT_SCOPE)
 
         # Apk package names.
         # '-' indicates a package that cannot be installed from apk
         # for example pangocairo which is part of cairo. If we fail to
         # locate pangocairo, we *have* to abort.
-        set(PackageList "${DockerList}" PARENT_SCOPE)
+        set(${PackageList} ${${DockerList}} PARENT_SCOPE)
     else()
         message("-- Running on development")
-        set(PKG_INSTALL_CMD "brew" "install" PARENT_SCOPE)
-        set(PKG_MANAGER "brew" PARENT_SCOPE)
+        set(PKG_INSTALL_CMD brew install PARENT_SCOPE)
+        set(PKG_MANAGER brew PARENT_SCOPE)
 
         if(NOT CAN_INSTALL)
             # Check if brew is installed
@@ -33,7 +33,7 @@ function(ConfigurePlatform DevelopmentList DockerList PackageList)
         # '-' indicates a package that cannot be installed from brew
         # for example pangocairo which is part of cairo. If we fail to
         # locate pangocairo, we *have* to abort.
-        set(PackageList "${DevelopmentList}" PARENT_SCOPE)
+        set(${PackageList} ${${DevelopmentList}} PARENT_SCOPE)
     endif()
 endfunction()
 
@@ -58,7 +58,7 @@ function(FindDependecies Dependencies Packages CFlags Libs IncludeDirs)
                     message(FATAL_ERROR "-- Couldn't install ${PKG}")
                 endif()
                 message("-- Couldn't find ${PKG}. Attempting to install...")
-                execute_process(COMMAND ${PKG_INSTALL_CMD} "${INSTALL}" RESULT_VARIABLE _EXIT_CODE OUTPUT_QUIET ERROR_QUIET)
+                execute_process(COMMAND ${PKG_INSTALL_CMD} ${INSTALL} OUTPUT_QUIET ERROR_QUIET RESULT_VARIABLE _EXIT_CODE )
                 if(NOT _EXIT_CODE EQUAL 0)
                     message(FATAL_ERROR "-- Couldn't install ${PKG}: ${PKG_MANAGER} exited with ${_EXIT_CODE}")
                 else()
@@ -98,6 +98,7 @@ function(FindDependecies Dependencies Packages CFlags Libs IncludeDirs)
     set(${CFlags} ${${CFlags}} PARENT_SCOPE)
     set(${Libs} ${${Libs}} PARENT_SCOPE)
     set(${IncludeDirs} ${${IncludeDirs}} PARENT_SCOPE)
+
 
 endfunction(FindDependecies Dependencies)
 
@@ -156,5 +157,6 @@ function(FetchSubmodules Submodules Directory)
         foreach(LIB ${Submodules})
             add_subdirectory(${${Directory}}/${LIB})
         endforeach()
+
     endif()    
 endfunction(FetchSubmodules)

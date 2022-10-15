@@ -7,7 +7,7 @@ project(PDF-Generator VERSION 1.0
                   DESCRIPTION "Component to generate Thirdfort PDFs"
                   LANGUAGES CXX)
 
-include(collect_dependencies.cmake)
+include(cmake/collect_dependencies.cmake)
 
 set(APK_PACKAGES
     pkgconfig)

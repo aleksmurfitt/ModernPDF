@@ -1,6 +1,9 @@
+#define POINTERHOLDER_TRANSITION 3
+#include "config.hpp"
 #include "pdf.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -22,8 +25,9 @@ constexpr auto timer = [](auto &&func, auto &&...params) -> std::chrono::duratio
 inline void test() {
     Document d{};
     d.makeFontTest();
-    d.makePageTest();
-    d.write("/Users/aleks/workbench/C++/pdf-generator v2/test.pdf");
+    for (size_t i = 0; i < 1; i++)
+        d.makePageTest();
+    d.write(Config::output / "test.pdf");
 }
 
 int main() {

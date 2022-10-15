@@ -2,6 +2,7 @@ fonts/**
 test.pdf
 Doxyfile
 build/**
+output/**
 .vscode/**
 
 .DS_Store

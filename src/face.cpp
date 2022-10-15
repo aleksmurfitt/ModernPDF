@@ -1,5 +1,6 @@
 #define POINTERHOLDER_TRANSITION 3
 #include "face.hpp"
+
 #include "font.hpp"
 #include "fontManager.hpp"
 #include "pdf.hpp"
@@ -60,16 +61,16 @@ void PDFLib::Face::embed(HbBlobT *blob) {
     descriptor.replaceKey("/FontFile2", stream);
 }
 
-int PDFLib::Face::getAscender() {
+double PDFLib::Face::getAscender() {
     hb_font_extents_t extents;
     hb_font_get_h_extents(face, &extents);
-    return extents.ascender * font.getScale();
+    return static_cast<double>(extents.ascender) * font.getScale();
 }
 
-int PDFLib::Face::getDescender() {
+double PDFLib::Face::getDescender() {
     hb_font_extents_t extents;
     hb_font_get_h_extents(face, &extents);
-    return extents.descender * font.getScale();
+    return static_cast<double>(extents.descender) * font.getScale();
 }
 
 float PDFLib::Face::getItalicAngle() {
@@ -82,7 +83,7 @@ int PDFLib::Face::getCapHeight() {
     return out * font.getScale();
 }
 
-std::pair<int, std::string> PDFLib::Face::shape(std::string text, float points) {
+std::tuple<float, float, std::string> PDFLib::Face::shape(std::string text, float points) {
     BufferHolder buffer;
     hb_buffer_add_utf8(buffer, text.c_str(), -1, 0, -1);
     hb_buffer_set_direction(buffer, HB_DIRECTION_LTR);
@@ -93,7 +94,8 @@ std::pair<int, std::string> PDFLib::Face::shape(std::string text, float points) 
     unsigned int glyph_count;
     hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buffer, &glyph_count);
     hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(buffer, &glyph_count);
-    int width = 0;
+    float width = 0;
+    float height = getAscender() - getDescender();
     std::string out;
     out.reserve(text.length() * 2);
     out.push_back('[');
@@ -112,5 +114,5 @@ std::pair<int, std::string> PDFLib::Face::shape(std::string text, float points) 
         }
     }
     out += ")]";
-    return std::make_tuple(width * points, out);
+    return std::make_tuple(width * points * font.getScale() / 1000.0, height * points * font.getScale() / 1000, out);
 };

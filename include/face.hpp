@@ -33,11 +33,12 @@ class Face {
   public:
     Face(HbFaceT *faceHandle, Font &font, std::string handle);
 
-    int getAscender();
-    int getDescender();
+    double getAscender();
+    double getDescender();
     int getCapHeight();
     float getItalicAngle();
-    std::pair<int, std::string> shape(std::string text, float points);
+    std::tuple<float, float, std::string> shape(std::string text, float points);
+    float getHeight(std::string text);
     void embed(HbBlobT *blob);
 
     int getWeight() {
