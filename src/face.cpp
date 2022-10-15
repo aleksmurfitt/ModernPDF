@@ -6,84 +6,38 @@
 #include "pdf.hpp"
 
 #include <iostream>
-
-PDFLib::Face::Face(HbFaceT *faceHandle, Font &font, std::string handle)
+using namespace PDFLib;
+Face::Face(FaceHolder face, double scale, std::string handle)
     : glyphSet{subsetInput},
-      face{faceHandle},
-      font{font},
-      dictionary{("<<"
-                  " /Type /Font"
-                  " /Subtype /TrueType"
-                  " /Encoding /WinAnsiEncoding"
-                  ">>"_qpdf)},
-      descriptor{("<<"
-                  " /Type /FontDescriptor"
-                  ">>"_qpdf)},
+      face{std::move(face)},
+      scale{scale},
       handle{handle} {
-    descriptor.replaceKey("/FontBBox", font.getBoundingBox());
-    descriptor.replaceKey("/FontName", QPDFObjectHandle::newName("/" + std::string(font.getPostScriptName())));
-    descriptor.replaceKey("/ItalicAngle", QPDFObjectHandle::newReal(getSlantAngle(), 1));
-    descriptor.replaceKey("/Ascent", QPDFObjectHandle::newInteger(getAscender()));
-    descriptor.replaceKey("/Flags", QPDFObjectHandle::newInteger(1 << 5));
-    descriptor.replaceKey("/Descent", QPDFObjectHandle::newInteger(getDescender()));
-    descriptor.replaceKey("/CapHeight", QPDFObjectHandle::newInteger(getCapHeight()));
-    descriptor.replaceKey("/StemV", QPDFObjectHandle::newInteger(10 + (getWeight() - 50) * 220 / 900));
-
-    dictionary.replaceKey("/BaseFont", QPDFObjectHandle::newName("/" + std::string(font.getPostScriptName())));
-    dictionary.replaceKey("/FontDescriptor", descriptor);
+    hb_subset_input_set_flags(subsetInput, HB_SUBSET_FLAGS_GLYPH_NAMES);
 };
 
-void PDFLib::Face::embed(HbBlobT *blob) {
-    hb_subset_input_set_flags(subsetInput, HB_SUBSET_FLAGS_GLYPH_NAMES);
-    subsetFont = hb_subset_or_fail(font.getHbObj(), subsetInput);
-    subsetBlob = hb_face_reference_blob(*subsetFont);
-
-    dictionary.replaceKey("/FirstChar", QPDFObjectHandle::newInteger(hb_set_get_min(glyphSet)));
-    dictionary.replaceKey("/LastChar", QPDFObjectHandle::newInteger(hb_set_get_max(glyphSet)));
-    std::vector<QPDFObjectHandle> glyphAdvances;
-    for (size_t i = hb_set_get_min(glyphSet); i <= hb_set_get_max(glyphSet); ++i) {
-        hb_codepoint_t codepoint = 0;
-        if (hb_set_has(glyphSet, i))
-            codepoint = i;
-        hb_codepoint_t glyph;
-        hb_font_get_glyph(face, codepoint, 0, &glyph);
-        glyphAdvances.push_back(
-            QPDFObjectHandle::newInteger(hb_font_get_glyph_h_advance(face, glyph) * font.getScale()));
-    }
-    dictionary.replaceKey("/Widths", QPDFObjectHandle::newArray(glyphAdvances));
-    unsigned int length;
-
-    auto data = std::make_shared<Buffer>((unsigned char *)(hb_blob_get_data(*subsetBlob, &length)), length);
-    auto stream = QPDFObjectHandle::newStream(&font.getManager().getDocument().pdf);
-    stream.replaceStreamData(data, QPDFObjectHandle(), QPDFObjectHandle::newNull());
-    auto dict = stream.getDict();
-    dict.replaceKey("/Length1", QPDFObjectHandle::newInteger(length));
-    descriptor.replaceKey("/FontFile2", stream);
-}
-
-double PDFLib::Face::getAscender() {
+double Face::getAscender() {
     hb_font_extents_t extents;
     hb_font_get_h_extents(face, &extents);
-    return static_cast<double>(extents.ascender) * font.getScale();
+    return static_cast<double>(extents.ascender) * scale;
 }
 
-double PDFLib::Face::getDescender() {
+double Face::getDescender() {
     hb_font_extents_t extents;
     hb_font_get_h_extents(face, &extents);
-    return static_cast<double>(extents.descender) * font.getScale();
+    return static_cast<double>(extents.descender) * scale;
 }
 
-float PDFLib::Face::getItalicAngle() {
-    return hb_style_get_value(face, HB_STYLE_TAG_SLANT_ANGLE) * font.getScale();
+float Face::getItalicAngle() {
+    return hb_style_get_value(face, HB_STYLE_TAG_SLANT_ANGLE);
 }
 
-int PDFLib::Face::getCapHeight() {
+int Face::getCapHeight() {
     int32_t out;
     hb_ot_metrics_get_position(face, HB_OT_METRICS_TAG_CAP_HEIGHT, &out);
-    return out * font.getScale();
+    return out * scale;
 }
 
-std::tuple<float, float, std::string> PDFLib::Face::shape(std::string text, float points) {
+std::pair<float, std::string> Face::shape(std::string text, float points) {
     BufferHolder buffer;
     hb_buffer_add_utf8(buffer, text.c_str(), -1, 0, -1);
     hb_buffer_set_direction(buffer, HB_DIRECTION_LTR);
@@ -109,10 +63,10 @@ std::tuple<float, float, std::string> PDFLib::Face::shape(std::string text, floa
         out.push_back(text[i]);
         if (error) {
             out.push_back(')');
-            out += std::to_string((int32_t)(error * font.getScale()));
+            out += std::to_string((int32_t)(error * scale));
             out.push_back('(');
         }
     }
     out += ")]";
-    return std::make_tuple(width * points * font.getScale() / 1000.0, height * points * font.getScale() / 1000, out);
+    return std::make_tuple(width * scale * points / 1000.0, out);
 };

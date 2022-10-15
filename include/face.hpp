@@ -12,6 +12,7 @@
 
     #include <climits>
     #include <filesystem>
+    #include <optional>
     #include <string_view>
     #include <vector>
 
@@ -21,43 +22,44 @@ class Document;
 
 class Face {
     SubsetInputHolder subsetInput;
-    std::optional<BlobHolder> subsetBlob;
-    std::optional<FontHolder> subsetFont;
     UnicodeSetHolder glyphSet;
     FaceHolder face;
-    Font &font;
-    QPDFObjectHandle descriptor;
-    QPDFObjectHandle dictionary;
+    double scale;
     const std::string handle;
 
   public:
-    Face(HbFaceT *faceHandle, Font &font, std::string handle);
+    Face(FaceHolder face, double scale, std::string handle);
 
     double getAscender();
     double getDescender();
     int getCapHeight();
     float getItalicAngle();
-    std::tuple<float, float, std::string> shape(std::string text, float points);
+    std::pair<float, std::string> shape(std::string text, float points);
     float getHeight(std::string text);
-    void embed(HbBlobT *blob);
-
     int getWeight() {
         return hb_style_get_value(face, HB_STYLE_TAG_WEIGHT);
     }
-
     const std::string &getHandle() {
         return handle;
     }
-
     float getSlantAngle() {
         return hb_style_get_value(face, HB_STYLE_TAG_SLANT_ANGLE);
     }
-
-    QPDFObjectHandle &getDictionary() {
-        return dictionary;
+    UnicodeSetHolder &getUsedGlyphs() {
+        return glyphSet;
     }
-    QPDFObjectHandle &getDescriptor() {
-        return descriptor;
+    hb_codepoint_t getGlyph(hb_codepoint_t unicodeCodepoint) {
+        hb_codepoint_t glyph;
+        hb_font_get_glyph(face, unicodeCodepoint, 0, &glyph);
+        return glyph;
+    }
+    hb_position_t getGlyphAdvance(hb_codepoint_t glyph, bool LTR = true) {
+        if (LTR)
+            return hb_font_get_glyph_h_advance(face, glyph) * scale;
+        throw std::logic_error("Not implemented");
+    }
+    SubsetInputHolder &getSubsetInput() {
+        return subsetInput;
     }
 };
 } // namespace PDFLib

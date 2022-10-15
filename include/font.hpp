@@ -25,6 +25,7 @@ class Font {
     std::vector<Face> faces;
     FontManager &manager;
     const size_t index;
+
     class HeadTable {
         static constexpr uint32_t Tag = 1751474532;
         FontTableParser parser;
@@ -758,6 +759,9 @@ class Font {
     } nameTable;
 
   public:
+    const double scale;
+    BlobHolder blob;
+
     Font(HbFontT *fontHandle, FontManager &manager, size_t index);
 
     HbFontT *getHbObj() {
@@ -789,17 +793,9 @@ class Font {
         return nameTable[NameTable::RecordType::PostScriptName];
     }
 
-    uint16_t getUnitsPerEM() {
-        return headTable.unitsPerEM;
-    }
-
-    float getScale() {
-        return 1000.0 / getUnitsPerEM();
-    };
-
     BBox getBoundingBox() {
         BBox out{headTable.xMin, headTable.yMin, headTable.xMax, headTable.yMax};
-        out *= getScale();
+        out *= scale;
         return out;
     }
 
@@ -807,25 +803,7 @@ class Font {
         return hb_ot_var_get_axis_count(font);
     }
 
-    uint16_t getWeight() {
-        return os2Table.usWeightClass;
-    }
-
-    int16_t getCapHeight() {
-        if (os2Table.sxCapHeight != 0)
-            return os2Table.sxCapHeight * getScale();
-        else
-            return 80;
-    }
-
-    uint16_t getFirstCharIndex() {
-        return os2Table.usFirstCharIndex;
-    }
-
-    uint16_t getLastCharIndex() {
-        return hb_face_get_glyph_count(font);
-    }
-
+    FontHolder makeSubset(Face &face);
     Face &makeFace();
 
     decltype(faces) &getFaces() {

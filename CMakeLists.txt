@@ -10,18 +10,17 @@ project(PDF-Generator VERSION 1.0
 include(cmake/collect_dependencies.cmake)
 
 set(APK_PACKAGES
-    pkgconfig)
+    pkgconfig
+    harfbuzz)
 
 set(BREW_PACKAGES
     pkg-config
-    icu4c
     harfbuzz
     -)
 
 # Required dynamic libraries
 set(PKG_CONF_MODS
     pkg-config
-    icu-i18n
     harfbuzz
     harfbuzz-subset)
 

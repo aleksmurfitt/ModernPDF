@@ -5,7 +5,11 @@
 
 #include <filesystem>
 #include <memory>
-
+namespace detail {
+inline constexpr auto _bufferDeleter = [](std::filesystem::path fontFile) -> auto{
+    return hb_blob_create_from_file(fontFile.c_str());
+};
+} // namespace detail
 namespace PDFLib {
 using HbFontT = hb_face_t;
 using HbFaceT = hb_font_t;
@@ -18,10 +22,14 @@ inline constexpr nullarg_t nullarg;
 template <auto arg> inline constexpr bool is_nullarg_v = std::is_same_v<std::remove_cv_t<decltype(arg)>, nullarg_t>;
 
 template <typename T, auto deleter = nullarg, auto initialiser = nullarg> class PtrHolder {
-    using SafeT = std::unique_ptr<T, decltype([](T *ptr) {
-                                      if constexpr (!is_nullarg_v<deleter>)
-                                          deleter(ptr);
-                                  })>;
+    struct PtrDeleter {
+        void operator()(T *ptr) {
+            if constexpr (!is_nullarg_v<deleter>)
+                deleter(ptr);
+        }
+    };
+
+    using SafeT = std::unique_ptr<T, PtrDeleter>;
     SafeT object;
 
   public:
@@ -39,9 +47,7 @@ template <typename T, auto deleter = nullarg, auto initialiser = nullarg> class 
 
 using FaceHolder = PtrHolder<HbFaceT, hb_font_destroy>;
 using FontHolder = PtrHolder<HbFontT, hb_face_destroy>;
-using BlobHolder =
-    PtrHolder<HbBlobT, hb_blob_destroy,
-              ([](std::filesystem::path fontFile) -> auto{ return hb_blob_create_from_file(fontFile.c_str()); })>;
+using BlobHolder = PtrHolder<HbBlobT, hb_blob_destroy, detail::_bufferDeleter>;
 using BufferHolder = PtrHolder<HbBufferT, hb_buffer_destroy, hb_buffer_create>;
 
 using GlyphSetHolder = PtrHolder<HbSetT, nullarg, hb_subset_input_glyph_set>;
