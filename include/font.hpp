@@ -13,6 +13,7 @@
 
     #include <climits>
     #include <filesystem>
+    #include <functional>
     #include <string_view>
     #include <vector>
 
@@ -803,7 +804,7 @@ class Font {
         return hb_ot_var_get_axis_count(font);
     }
 
-    FontHolder makeSubset(Face &face);
+    std::function<void(Pipeline *)> makeSubsetFunction(Face &face, QPDFObjectHandle dict);
     Face &makeFace();
 
     decltype(faces) &getFaces() {

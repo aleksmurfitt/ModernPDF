@@ -6,20 +6,20 @@ using namespace PDFLib;
 
 FontManager::FontManager(Document &document)
     : document{document},
-      dictionary{document.pdf.makeIndirectObject(QPDFObjectHandle::newDictionary())} {};
+      dictionary{document.newIndirectObject(QPDFObjectHandle::newDictionary())} {};
 
 void FontManager::embedFonts() {
     for (auto &&[key, font] : fonts) {
         auto &faces = font.getFaces();
         for (auto &&face : faces) {
-            auto fontDescriptor = document.pdf.makeIndirectObject(("<<"
-                                                                   " /Type /FontDescriptor"
-                                                                   ">>"_qpdf));
-            auto fontDictionary = document.pdf.makeIndirectObject(("<<"
-                                                                   " /Type /Font"
-                                                                   " /Subtype /TrueType"
-                                                                   " /Encoding /WinAnsiEncoding"
-                                                                   ">>"_qpdf));
+            auto fontDescriptor = document.newIndirectObject(("<<"
+                                                              " /Type /FontDescriptor"
+                                                              ">>"_qpdf));
+            auto fontDictionary = document.newIndirectObject(("<<"
+                                                              " /Type /Font"
+                                                              " /Subtype /TrueType"
+                                                              " /Encoding /WinAnsiEncoding"
+                                                              ">>"_qpdf));
 
             fontDescriptor.replaceKey("/FontBBox", font.getBoundingBox());
             fontDescriptor.replaceKey("/FontName",
@@ -36,9 +36,6 @@ void FontManager::embedFonts() {
             fontDictionary.replaceKey("/FontDescriptor", fontDescriptor);
 
             dictionary.replaceKey(face.getHandle(), fontDictionary);
-            FontHolder subsetFont = font.makeSubset(face);
-            // Obviously a leak — will fix with a Pipeline
-            HbBlobT *subsetBlob = hb_face_reference_blob(subsetFont);
 
             fontDictionary.replaceKey("/FirstChar", QPDFObjectHandle::newInteger(hb_set_get_min(face.getUsedGlyphs())));
             fontDictionary.replaceKey("/LastChar", QPDFObjectHandle::newInteger(hb_set_get_max(face.getUsedGlyphs())));
@@ -51,13 +48,11 @@ void FontManager::embedFonts() {
                 glyphAdvances.push_back(QPDFObjectHandle::newInteger(face.getGlyphAdvance(face.getGlyph(codepoint))));
             }
             fontDictionary.replaceKey("/Widths", QPDFObjectHandle::newArray(glyphAdvances));
-            unsigned int length;
 
-            auto data = std::make_shared<Buffer>((unsigned char *)(hb_blob_get_data(subsetBlob, &length)), length);
-            auto stream = QPDFObjectHandle::newStream(&font.getManager().getDocument().pdf);
-            stream.replaceStreamData(data, QPDFObjectHandle(), QPDFObjectHandle::newNull());
+            auto stream = document.newStream();
             auto dict = stream.getDict();
-            dict.replaceKey("/Length1", QPDFObjectHandle::newInteger(length));
+            stream.replaceStreamData(
+                font.makeSubsetFunction(face, dict), QPDFObjectHandle(), QPDFObjectHandle::newNull());
             fontDescriptor.replaceKey("/FontFile2", stream);
         }
     }
