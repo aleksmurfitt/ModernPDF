@@ -12,43 +12,49 @@ void FontManager::embedFonts() {
     for (auto &&[key, font] : fonts) {
         auto &faces = font.getFaces();
         for (auto &&face : faces) {
-            auto fontDescriptor = document.newIndirectObject(("<<"
-                                                              " /Type /FontDescriptor"
-                                                              ">>"_qpdf));
-            auto fontDictionary = document.newIndirectObject(("<<"
-                                                              " /Type /Font"
-                                                              " /Subtype /TrueType"
-                                                              " /Encoding /WinAnsiEncoding"
-                                                              ">>"_qpdf));
+            auto fontDescriptor = document.newIndirectObject(QPDFObjectHandle::newDictionary());
+            auto fontDictionary = document.newIndirectObject(QPDFObjectHandle::newDictionary());
+            auto descendantFontDictionary = document.newIndirectObject(QPDFObjectHandle::newDictionary());
 
+            fontDescriptor.replaceKey("/Type", QPDFObjectHandle::newName("/FontDescriptor"));
             fontDescriptor.replaceKey("/FontBBox", font.getBoundingBox());
             fontDescriptor.replaceKey("/FontName",
                                       QPDFObjectHandle::newName("/" + std::string(font.getPostScriptName())));
             fontDescriptor.replaceKey("/ItalicAngle", QPDFObjectHandle::newReal(face.getSlantAngle(), 1));
             fontDescriptor.replaceKey("/Ascent", QPDFObjectHandle::newInteger(face.getAscender()));
-            fontDescriptor.replaceKey("/Flags", QPDFObjectHandle::newInteger(1 << 5));
+            fontDescriptor.replaceKey("/Flags", QPDFObjectHandle::newInteger(font.getFlags()));
             fontDescriptor.replaceKey("/Descent", QPDFObjectHandle::newInteger(face.getDescender()));
-            fontDescriptor.replaceKey("/CapHeight", QPDFObjectHandle::newInteger(face.getCapHeight()));
+            fontDescriptor.replaceKey("/CapHeight",
+                                      QPDFObjectHandle::newInteger(face.getCapHeight() || face.getAscender()));
             fontDescriptor.replaceKey("/StemV", QPDFObjectHandle::newInteger(10 + (face.getWeight() - 50) * 220 / 900));
 
+            descendantFontDictionary.replaceKey("/Type", QPDFObjectHandle::newName("/Font"));
+            descendantFontDictionary.replaceKey("/Subtype", QPDFObjectHandle::newName("/CIDFontType2"));
+            descendantFontDictionary.replaceKey("/CIDToGIDMap", QPDFObjectHandle::newName("/Identity"));
+            descendantFontDictionary.replaceKey("/BaseFont",
+                                                QPDFObjectHandle::newName("/" + std::string(font.getPostScriptName())));
+            descendantFontDictionary.replaceKey("/CIDSystemInfo",
+                                                "<< /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>"_qpdf);
+            descendantFontDictionary.replaceKey("/FontDescriptor", fontDescriptor);
+
+            std::vector<QPDFObjectHandle> glyphAdvances{};
+            for (size_t i = 0; i <= hb_set_get_max(face.getUsedGlyphs()); ++i)
+                glyphAdvances.push_back(QPDFObjectHandle::newInteger(face.getGlyphAdvance(i)));
+
+            descendantFontDictionary.replaceKey(
+                "/W",
+                document.newIndirectObject(QPDFObjectHandle::newArray(
+                    {QPDFObjectHandle::newInteger(0), QPDFObjectHandle::newArray(glyphAdvances)})));
+
+            fontDictionary.replaceKey("/Type", QPDFObjectHandle::newName("/Font"));
+            fontDictionary.replaceKey("/Subtype", QPDFObjectHandle::newName("/Type0"));
             fontDictionary.replaceKey("/BaseFont",
                                       QPDFObjectHandle::newName("/" + std::string(font.getPostScriptName())));
-            fontDictionary.replaceKey("/FontDescriptor", fontDescriptor);
+            fontDictionary.replaceKey("/Encoding", QPDFObjectHandle::newName("/Identity-H"));
+
+            fontDictionary.replaceKey("/DescendantFonts", QPDFObjectHandle::newArray({descendantFontDictionary}));
 
             dictionary.replaceKey(face.getHandle(), fontDictionary);
-
-            fontDictionary.replaceKey("/FirstChar", QPDFObjectHandle::newInteger(hb_set_get_min(face.getUsedGlyphs())));
-            fontDictionary.replaceKey("/LastChar", QPDFObjectHandle::newInteger(hb_set_get_max(face.getUsedGlyphs())));
-            std::vector<QPDFObjectHandle> glyphAdvances;
-
-            for (size_t i = hb_set_get_min(face.getUsedGlyphs()); i <= hb_set_get_max(face.getUsedGlyphs()); ++i) {
-                hb_codepoint_t codepoint = 0;
-                if (hb_set_has(face.getUsedGlyphs(), i))
-                    codepoint = i;
-                glyphAdvances.push_back(QPDFObjectHandle::newInteger(face.getGlyphAdvance(face.getGlyph(codepoint))));
-            }
-            fontDictionary.replaceKey("/Widths", QPDFObjectHandle::newArray(glyphAdvances));
-
             auto stream = document.newStream();
             auto dict = stream.getDict();
             stream.replaceStreamData(
@@ -58,6 +64,7 @@ void FontManager::embedFonts() {
     }
 }
 
+// TODO: Add support for vertical writing
 std::vector<std::string> FontManager::loadFontFile(std::filesystem::path file) {
     BlobHolder blob{file};
     std::vector<std::string> out;

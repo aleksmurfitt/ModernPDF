@@ -29,12 +29,11 @@ class Document {
         Page(Document &doc) : doc{doc}, pageDict{doc.newIndirectObject(QPDFObjectHandle::newDictionary())} {
             pageDict.replaceKey("/Type", QPDFObjectHandle::newName("/Page"));
             pageDict.replaceKey("/MediaBox", QPDFObjectHandle::newArray(QPDFObjectHandle::Rectangle(0, 0, 600, 850)));
-            pageDict.replaceKey("/CropBox",
-                                QPDFObjectHandle::newArray(QPDFObjectHandle::Rectangle(2.5, 3.5, 595, 842)));
+            pageDict.replaceKey("/CropBox", QPDFObjectHandle::newArray(QPDFObjectHandle::Rectangle(2.5, 4, 595, 842)));
             pageDict.replaceKey("/Resources", doc.resources);
             doc.pages.addPage(pageDict, false);
         }
-        void setContents(std::string &contents) {
+        void setContents(const std::string &contents) {
             pageDict.replaceKey("/Contents", QPDFObjectHandle::newStream(&doc.pdf, contents));
         }
     };
@@ -42,13 +41,17 @@ class Document {
   public:
     Document() : pages{(pdf.emptyPDF(), pdf)}, resources{QPDFObjectHandle::newDictionary()}, fontManager{*this} {};
 
-    void write(std::filesystem::path path) {
-        QPDFWriter w(pdf, path.c_str());
+    void finish() {
         fontManager.embedFonts();
         resources.replaceKey("/Font", fontManager.getDictionary());
+    }
+
+    void write(std::filesystem::path path) {
+        QPDFWriter w(pdf, path.c_str());
         w.setCompressStreams(true);
         w.setPreserveUnreferencedObjects(true);
         w.setLinearization(true);
+        w.setMinimumPDFVersion(PDFVersion(1, 6));
         w.write();
     }
 

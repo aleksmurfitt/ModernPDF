@@ -11,9 +11,9 @@ PDFLib::Font::Font(HbFontT *fontHandle, FontManager &manager, size_t index)
       blob{hb_face_reference_blob(font)},
       manager{manager},
       headTable{font},
-      nameTable{font},
       index{index},
       os2Table{font},
+      postTable{font},
       scale{1000.0 / static_cast<double>(headTable.unitsPerEM)} {};
 
 PDFLib::Face &PDFLib::Font::makeFace() {

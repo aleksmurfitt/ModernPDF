@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <iostream>
 #include <numeric>
+#include <set>
 #include <thread>
 #include <vector>
 
@@ -23,11 +24,224 @@ constexpr auto timer = [](auto &&func, auto &&...params) -> std::chrono::duratio
     return stop - start;
 };
 
-inline void test(bool write, float points, float lineSpacing, bool showMetrics) {
-    Document d{};
-    FontManager &fontManager = d.getFontManager();
+inline auto Line(double xMin, double yMin, double xMax, double yMax) -> std::string {
+    return (" " + std::to_string(xMin) + " " + std::to_string(yMin) + " m " + std::to_string(xMax) + " " +
+            std::to_string(yMax) + " l ");
+};
+inline auto Text(double x, double y, Face &face, std::string text, double points) -> std::string {
+    return (" BT " + face.getHandle() + " " + std::to_string(points) + " Tf 0.9867 0.9867 0.9867 rg 0 Tr " +
+            std::to_string(x) + " " + std::to_string(y) + " Td " + text + " TJ ET ");
+};
+
+inline std::string latinTest(FontManager &fontManager, double points, double lineSpacing, bool showMetrics) {
     // Paint the background;
     std::string contents = "q 0.18824 0.18824 0.18824 rg 0 0 600 850 re F Q ";
+
+    // Draw the names and metrics (if relevant)
+    auto &fonts = fontManager.getFonts();
+
+    double ytotal = 0;
+    bool left = true;
+    double max = 0;
+    for (auto &&[name, font] : fonts) {
+        auto &face = font.makeFace();
+        if (name.find("Noto ") != std::string::npos)
+            continue;
+        double height = (face.getAscender() - face.getDescender()) * points / 1000.0;
+        if (left)
+            max = height;
+        else {
+            ytotal += (max < height ? height : max) * lineSpacing;
+        }
+        left = !left;
+    }
+
+    auto draw = [&](auto &face, auto &str, auto width, auto ypos, auto size, bool left) -> double {
+        double above = face.getAscender() * size / 1000.0;
+        double below = face.getDescender() * size / -1000.0;
+        double height = above + below;
+        double startx = left ? 25 : 595 - 25 - width;
+        if (showMetrics)
+            contents += "q 0.5 w [1 2] 0 d 0.6867 0.6867 0.6867 RG" +
+                        Line(startx, 842 - ypos - height, startx, 842 - ypos) +                  // left border
+                        Line(startx + width, 842 - ypos, startx + width, 842 - height - ypos) +  // right border
+                        Line(startx, 842 - ypos, startx + width, 842 - ypos) +                   // top border
+                        Line(startx, 842 - ypos - height, startx + width, 842 - ypos - height) + // bottom border
+                        Line(startx, 842 - ypos - above, startx + width, 842 - ypos - above) +   // baseline
+                        " S Q";
+        contents += Text(startx, 842 - above - ypos, face, str, size);
+        return height;
+    };
+
+    double ypos = (842 - ytotal) / 2;
+    left = true;
+    max = 0;
+    double prevWidth = 0;
+    double subpoints = points / 2.0;
+    for (auto &&[name, font] : fonts) {
+        if (name.find("Noto ") != std::string::npos)
+            continue;
+        auto &face = font.getFaces()[0];
+        try {
+            auto &&[width, title] = face.shape(name, points);
+            auto &&[subwidth, subtitle] = face.shape("And this is a subtitle.", subpoints);
+
+            if (!left && prevWidth + width > (540)) {
+                left = true;
+                ypos += max * lineSpacing;
+            }
+            auto height = draw(face, title, width, ypos, points, left);
+            draw(face, subtitle, subwidth, ypos + height + 4, subpoints, left);
+            if (left) {
+                max = height;
+                prevWidth = width;
+            } else {
+                ypos += (max < height ? height : max) * lineSpacing;
+            }
+            left = !left;
+
+        } catch (...) {
+            continue;
+        }
+    }
+
+    return contents;
+}
+
+inline std::pair<std::string, double> CJKTest(FontManager &fontManager) {
+    int points = 15;
+    std::string contents;
+    double pos = 40;
+    for (auto &&[name, font] : fontManager.getFonts()) {
+        auto &face = font.getFaces()[0];
+        const std::vector<std::string_view> lines{
+            std::string_view("人皆生而自由；在尊嚴及權利上均各平等！人各賦有理性良知，誠應和睦相處，情"),
+            std::string_view("同手足鑑於對人類家庭所有成員的固有尊嚴及其平等的和不移的權利的承認，乃是"),
+            std::string_view("世界自由、正鑑於各聯合國國家的人民已在聯合國憲章中重申他們對基本人權、人"),
+            std::string_view("格尊嚴和價值以及男大會，發布這一世界人權宣言，作為所有人民和所有國家努力"),
+            std::string_view("期每一個人和社會機構經常銘念本宣言，努力通過教誨和教育促進對權利和自由的"),
+            std::string_view("尊重，並通過國家的和國際的漸進措施，使這些權利和自由在各會員鑑於對人類家"),
+            std::string_view("庭所有成員的固有尊嚴及其平等的和不移的權利的承認，乃是世界自由、正義與和"),
+        };
+        try {
+            double above = face.getAscender() * points / 1000.0;
+            double below = face.getDescender() * points / -1000.0;
+            double height = above + below;
+            for (const auto &line : lines) {
+                auto &&[width, text] = face.shape(line, points, HB_SCRIPT_HAN, HB_DIRECTION_LTR, "CN");
+                contents += Text((595.0 - width) / 2.0, 842 - pos, face, text, points);
+                pos += height;
+            }
+            pos += 40;
+        } catch (std::runtime_error e) {
+            continue;
+        }
+    }
+    return {contents, pos};
+}
+
+inline std::string ArabicTest(FontManager &fontManager, double &pos) {
+    int points = 15;
+    std::string contents;
+    for (auto &&[name, font] : fontManager.getFonts()) {
+        auto &face = font.getFaces()[0];
+        const std::vector<std::string_view> lines{
+            std::string_view(
+                "کو تبدیل کرنے اور کُھلے عام یا نجی طور پر، تنہا یا دوسروں کے ساتھ مل جل کر عقیدے کی تبلیغ،"),
+            std::string_view("ہر انسان کو آزادیٔ فکر، آزادیٔ ضمیر، اور آزادیٔ مذہب کا پورا حق۔"),
+        };
+        try {
+            double above = face.getAscender() * points / 1000.0;
+            double below = face.getDescender() * points / -1000.0;
+            double height = above + below;
+            for (const auto &line : lines) {
+                auto &&[width, text] = face.shape(line, points, HB_SCRIPT_ARABIC, HB_DIRECTION_RTL, "AR");
+                contents += Text(595 - 25 - width, 842 - pos, face, text, points);
+                pos += height * 1.14;
+            }
+            pos += 40;
+        } catch (std::runtime_error e) {
+            continue;
+        }
+    }
+    return contents;
+}
+inline std::string DevanagariTest(FontManager &fontManager, double &pos) {
+    int points = 15;
+    std::string contents;
+    for (auto &&[name, font] : fontManager.getFonts()) {
+        auto &face = font.getFaces()[0];
+        const std::vector<std::string_view> lines{
+            std::string_view(
+                "सबिन मानमि कोअः हियातिङ अन्डोः एकतियर को रेयः मामले रे जोनोमेए तेगे दनामुल अन्डोः बराबरि रेयः नमा कना"),
+            std::string_view(
+                "इनिकु बुद्दि अन्डोः जिबोन बितर रेयः एनेम नमा कना अन्डोः अकोअको रे हगेयाबोहया (भाईचारे) रेयः जिबोन उङुः"),
+            std::string_view(
+                "तेको जानागर तेयः दोरकर। सबिन मानमि कोअः हियातिङ अन्डोः एकतियर को रेयः मामले रे जोनोमेए तेगे दनामुल"),
+            std::string_view("अन्डोः बराबरि रेयः नमा कना। इनिकु बुद्दि अन्डोः जिबोन बितर रेयः एनेम"),
+        };
+        try {
+            double above = face.getAscender() * points / 1000.0;
+            double below = face.getDescender() * points / -1000.0;
+            double height = above + below;
+            for (const auto &line : lines) {
+                auto &&[width, text] = face.shape(line, points, HB_SCRIPT_DEVANAGARI, HB_DIRECTION_LTR, "HI");
+                contents += Text(25, 842 - pos, face, text, points);
+                pos += height * 1.14;
+            }
+            pos += 40;
+        } catch (std::runtime_error e) {
+            continue;
+        }
+    }
+    return contents;
+}
+inline std::string EthiopicTest(FontManager &fontManager, double &pos) {
+    int points = 15;
+    std::string contents;
+    for (auto &&[name, font] : fontManager.getFonts()) {
+        auto &face = font.getFaces()[0];
+        const std::vector<std::string_view> lines{
+            std::string_view("ተወልዱ፡ኵሉ፡ሰብእ፡ግዑዛን፡ወዕሩያን፡በማዕረግ፡ወብሕግ።ቦሙ፡ኅሊና፡ወዐቅል፡ወይትጌበሩ፡አሐዱ፡ ምስለ፡አ"),
+            std::string_view("ሀዱ፡በመንፈሰ፡እኍና። ተወልዱ፡ኵሉ፡ሰብእ፡ግዑዛን፡ወዕሩያን፡በማዕረግ፡ወብሕግ።ቦሙ፡ኅሊና፡ወዐቅል፡ወይት"),
+            std::string_view("ጌበሩ፡አሐዱ፡ ምስለ፡አሀዱ፡በመንፈሰ፡እኍና።"),
+        };
+        try {
+            double above = face.getAscender() * points / 1000.0;
+            double below = face.getDescender() * points / -1000.0;
+            double height = above + below;
+            for (const auto &line : lines) {
+                auto &&[width, text] = face.shape(line, points, HB_SCRIPT_ETHIOPIC, HB_DIRECTION_LTR, "AM");
+                contents += Text(25, 842 - pos, face, text, points);
+                pos += height * 1.14;
+            }
+            pos += 40;
+        } catch (std::runtime_error e) {
+            continue;
+        }
+    }
+    return contents;
+}
+
+// takes font point size (double), line-spacing (double), and show-metrics (bool)
+int main(int argc, char *argv[]) {
+    using namespace std::chrono_literals;
+
+    double points;
+    double lineSpacing;
+    bool showMetrics;
+
+    if (argc == 4) {
+        points = std::stol(argv[1]);
+        lineSpacing = std::stof(argv[2]);
+        showMetrics = (std::string(argv[3]) == "true");
+    } else {
+        points = 20;
+        lineSpacing = 2.6;
+        showMetrics = false;
+    }
+    Document doc;
+    FontManager &fontManager = doc.getFontManager();
 
     // Load the fonts
     std::filesystem::path fontDir(Config::fonts);
@@ -37,97 +251,17 @@ inline void test(bool write, float points, float lineSpacing, bool showMetrics) 
             fontManager.loadFontFile(file);
     }
 
-    auto line = [](float xMin, float yMin, float xMax, float yMax) -> std::string {
-        return (" " + std::to_string(xMin) + " " + std::to_string(yMin) + " m " + std::to_string(xMax) + " " +
-                std::to_string(yMax) + " l ");
-    };
+    doc.createPage().setContents(latinTest(fontManager, points, lineSpacing, showMetrics));
 
-    // Draw the names and metrics (if relevant)
-    size_t index = 0;
-    auto &fonts = fontManager.getFonts();
-    float ytotal = 0;
-    bool left = true;
-    float max = 0;
-    for (auto &&[name, font] : fonts) {
-        auto &face = font.makeFace();
-        float above = static_cast<float>(face.getAscender()) * points / 1000.0;
-        float below = static_cast<float>(face.getDescender()) * points / -1000.0;
-        if (left)
-            max = (above + below);
-        else
-            ytotal += (max < (above + below) ? (above + below) : max) * lineSpacing;
-        left = !left;
-    }
-    float ypos = (842 - ytotal) / 2;
-    left = true;
-    max = 0;
-    float prevWidth = 0;
-    for (auto &&[name, font] : fonts) {
-        auto &face = font.getFaces()[0];
-        auto &&[width, text] = face.shape(name, points);
+    std::string multiLingual = "q 0.18824 0.18824 0.18824 rg 0 0 600 850 re F Q ";
+    auto &&[cjk, pos] = CJKTest(fontManager);
+    auto &&ar = ArabicTest(fontManager, pos);
+    auto &&dev = DevanagariTest(fontManager, pos);
+    auto &&eth = EthiopicTest(fontManager, pos);
+    multiLingual += cjk + ar + dev + eth;
 
-        if (!left && prevWidth + width > (540)) {
-            left = true;
-            ypos += max * lineSpacing;
-        }
-
-        float above = static_cast<float>(face.getAscender()) * points / 1000.0;
-        float below = static_cast<float>(face.getDescender()) * points / -1000.0;
-        float height = above + below;
-        float startx = left ? 25 : 595 - 25 - width;
-        if (showMetrics)
-            contents += "q 0.5 w [1 2] 0 d 0.6867 0.6867 0.6867 RG" +
-                        line(startx, 842 - ypos - height, startx, 842 - ypos) +                  // left border
-                        line(startx + width, 842 - ypos, startx + width, 842 - height - ypos) +  // right border
-                        line(startx, 842 - ypos, startx + width, 842 - ypos) +                   // top border
-                        line(startx, 842 - ypos - height, startx + width, 842 - ypos - height) + // bottom border
-                        line(startx, 842 - ypos - above, startx + width, 842 - ypos - above) +   // baseline
-                        " S Q";
-        contents += " BT " + face.getHandle() + " " + std::to_string(points) + " Tf 0.9867 0.9867 0.9867 rg 0 Tr " +
-                    std::to_string(startx) + " " + std::to_string(842 - above - ypos) + " Td " + text + " TJ ET ";
-        index++;
-        if (left) {
-            max = height;
-            prevWidth = width;
-        } else
-            ypos += (max < height ? height : max) * lineSpacing;
-        left = !left;
-    }
-
-    // Create the page
-    for (size_t i = 0; i < 1; ++i)
-        d.createPage().setContents(contents);
-    if (write)
-        d.write(Config::output / "test.pdf");
-}
-
-// takes font point size (float), line-spacing (float), and show-metrics (bool)
-int main(int argc, char *argv[]) {
-    using namespace std::chrono_literals;
-
-    float points;
-    float lineSpacing;
-    bool showMetrics;
-
-    if (argc == 4) {
-        points = std::stol(argv[1]);
-        lineSpacing = std::stof(argv[2]);
-        showMetrics = std::string(argv[3]) == "true";
-    } else {
-        points = 20;
-        lineSpacing = 1.14;
-        showMetrics = true;
-    }
-
-    test(true, points, lineSpacing, showMetrics);
-
-    std::array<double, 100> times;
-    for (size_t i = 0; i < 100; i++) {
-        times[i] = timer(test, false, points, lineSpacing, showMetrics).count();
-    }
-
-    std::cout << "Min: " << *std::min_element(std::begin(times), std::end(times)) << "ms" << std::endl;
-    std::cout << "Avg: " << std::reduce(std::begin(times), std::end(times)) / times.size() << "ms" << std::endl;
-    std::cout << times.size() << " runs" << std::endl;
+    doc.createPage().setContents(multiLingual);
+    doc.finish();
+    doc.write(Config::output / "test.pdf");
     return 0;
 };
