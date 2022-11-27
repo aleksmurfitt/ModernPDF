@@ -4,16 +4,15 @@
     #include "private/font-tables/parser.hpp"
     #include "private/harfbuzz-helpers.hpp"
     #include "private/types/font.hpp"
+    #include "private/util.hpp"
 
     #include <hb-ot.h>
     #include <hb.h>
-    #include <qpdf/Buffer.hh>
-    #include <qpdf/QPDFObjectHandle.hh>
 
+    #include <array>
     #include <climits>
     #include <filesystem>
     #include <functional>
-    #include <string_view>
     #include <vector>
 
 namespace PDFLib {
@@ -23,11 +22,164 @@ class Document;
 class Font {
     FontHolder font;
     std::vector<Face> faces;
-    FontManager &manager;
     const size_t index;
+    std::string fontFamily;
+    std::string fontSubFamily;
+    std::string fontName;
+    std::string fontPostscriptName;
+    std::string fontCFFName;
+    bool CFF = false;
 
+    class CFFTable {
+        FontTableParser parser;
+        static constexpr uint32_t Tag = Util::tag<"CFF ">;
+        void skipIndex() {
+            std::vector<size_t> offsets{};
+            size_t count = parser.getNext<uint16_t>();
+            if (count == 0)
+                return;
+
+            size_t offsetSize = parser.getNext<uint8_t>();
+            for (size_t i = 0; i <= count; ++i)
+                offsets.push_back(parser.getNext(offsetSize));
+
+            for (size_t i = 0; i < count; ++i)
+                parser.getBytes<uint8_t>((offsets[i + 1] - offsets[i]));
+
+            return;
+        };
+        template <typename T> std::vector<std::span<const T>> parseIndex() {
+            std::vector<size_t> offsets{};
+            std::vector<std::span<const T>> objects{};
+            size_t count = parser.getNext<uint16_t>();
+            if (count == 0)
+                return objects;
+
+            size_t offsetSize = parser.getNext<uint8_t>();
+            for (size_t i = 0; i <= count; ++i)
+                offsets.push_back(parser.getNext(offsetSize));
+
+            for (size_t i = 0; i < count; ++i)
+                objects.push_back(parser.getBytes<T>((offsets[i + 1] - offsets[i])));
+
+            return objects;
+        };
+
+        void parseFloatOperand(Parser &parser) {
+            const uint8_t eof = 15;
+            while (true) {
+                const uint8_t b = parser.getNext<uint8_t>();
+                const uint8_t n1 = b >> 4;
+                const uint8_t n2 = b & 15;
+                if (n1 == eof || n2 == eof) {
+                    break;
+                }
+            }
+        }
+
+        int parseOperand(Parser &parser, uint8_t b0) {
+            if (b0 == 28)
+                return static_cast<int>(parser.getNext<uint16_t>());
+
+            if (b0 == 29) {
+                return static_cast<int>(parser.getNext<uint32_t>());
+            }
+
+            if (b0 == 30) {
+                parseFloatOperand(parser);
+                return 0;
+            }
+
+            if (b0 >= 32 && b0 <= 246) {
+                return b0 - 139;
+            }
+
+            if (b0 >= 247 && b0 <= 250) {
+                return (b0 - 247) * 256 + parser.getNext<uint8_t>() + 108;
+            }
+
+            if (b0 >= 251 && b0 <= 254) {
+                return -(b0 - 251) * 256 - parser.getNext<uint8_t>() - 108;
+            }
+
+            throw std::runtime_error("Invalid b0 " + std::to_string(b0));
+        }
+
+        template <typename T> std::map<uint16_t, std::vector<int>> parseDict(std::span<T> data) {
+            Parser parser{data.data()};
+            std::vector<int> operands;
+            std::map<uint16_t, std::vector<int>> records;
+            while (parser.offset < data.size()) {
+                uint16_t op = parser.getNext<uint8_t>();
+
+                if (op <= 21) {
+                    if (op == 12) {
+                        op = 1200 + parser.getNext<uint8_t>();
+                    }
+
+                    records.emplace(op, operands);
+                    operands.clear();
+                } else
+                    operands.push_back(parseOperand(parser, op));
+            }
+            return records;
+        }
+        std::vector<uint16_t> parseCharset(Parser parser, size_t nGlyphs) {
+            std::vector<uint16_t> charset{0};
+            nGlyphs--;
+            const uint8_t format = parser.getNext<uint8_t>();
+            uint16_t sid;
+            uint16_t count;
+            if (format == 0) {
+                for (size_t i = 0; i < nGlyphs; ++i)
+                    charset.push_back(parser.getNext<uint16_t>());
+            } else if (format == 1) {
+                while (charset.size() <= nGlyphs) {
+                    sid = parser.getNext<uint16_t>();
+                    count = parser.getNext<uint8_t>();
+                    for (size_t i = 0; i <= count; ++i) {
+                        charset.push_back(sid);
+                        ++sid;
+                    }
+                }
+            } else if (format == 2) {
+                while (charset.size() <= nGlyphs) {
+                    sid = parser.getNext<uint16_t>();
+                    count = parser.getNext<uint16_t>();
+                    for (size_t i = 0; i <= count; ++i) {
+                        charset.push_back(sid);
+                        ++sid;
+                    }
+                }
+            } else
+                throw new std::runtime_error("Unknown charset format");
+            return charset;
+        }
+
+        // This is intentionally mostly unimplemented — we only care to see if the
+        // CID to GID mapping is 1-to-1, and if not to get the mapping.
+      public:
+        bool isCID = false;
+        std::vector<uint16_t> charset;
+
+        CFFTable(HbFontT *font) : parser{font, Tag} {
+
+            // Skip header
+            parser.moveTo(4);
+            // Skip names
+            skipIndex();
+            auto topDictIndex = parseIndex<uint8_t>();
+            if (topDictIndex.size() == 0)
+                return;
+            auto topDict = parseDict(topDictIndex[0]);
+            if (topDict.contains(1230) && topDict[1230][0] != 0xFF | topDict[1230][1] != 0xFF)
+                isCID = true;
+            if (isCID)
+                charset = parseCharset(Parser(parser.startPtr + topDict[15][0]), hb_face_get_glyph_count(font));
+        };
+    };
     class HeadTable {
-        static constexpr uint32_t Tag = 1751474532;
+        static constexpr uint32_t Tag = Util::tag<"head">;
         FontTableParser parser;
 
       public:
@@ -53,9 +205,8 @@ class Font {
         HeadTable(HbFontT *font) : parser{font, Tag} {};
 
     } headTable;
-
     class OS2Table {
-        static constexpr uint32_t Tag = 1330851634;
+        static constexpr uint32_t Tag = Util::tag<"OS/2">;
         FontTableParser parser;
 
       public:
@@ -112,7 +263,7 @@ class Font {
 
     } os2Table;
     class PostTable {
-        static constexpr uint32_t Tag = 1886352244;
+        static constexpr uint32_t Tag = Util::tag<"post">;
         FontTableParser parser;
 
       public:
@@ -126,62 +277,96 @@ class Font {
 
     } postTable;
 
+    std::optional<CFFTable> cffTable = std::nullopt;
+
   public:
     const double scale;
     BlobHolder blob;
 
-    Font(HbFontT *fontHandle, FontManager &manager, size_t index);
+    Font(HbFontT *fontHandle, size_t index);
 
     HbFontT *getHbObj() {
         return font;
     }
 
-    std::string getFamily() {
-        std::string out;
-        out.resize(50);
-        unsigned int length = 50;
-        if (hb_ot_name_get_utf8(font, HB_OT_NAME_ID_TYPOGRAPHIC_FAMILY, HB_LANGUAGE_INVALID, &length, &out[0]) == 0) {
-            length = 50;
-            hb_ot_name_get_utf8(font, HB_OT_NAME_ID_FONT_FAMILY, HB_LANGUAGE_INVALID, &length, &out[0]);
-        }
+    std::string &getFamily() {
+        if (fontFamily.empty()) {
+            fontFamily.resize(50);
+            unsigned int length = 50;
+            if (hb_ot_name_get_utf8(
+                    font, HB_OT_NAME_ID_TYPOGRAPHIC_FAMILY, HB_LANGUAGE_INVALID, &length, &fontFamily[0]) == 0) {
+                length = 50;
+                hb_ot_name_get_utf8(font, HB_OT_NAME_ID_FONT_FAMILY, HB_LANGUAGE_INVALID, &length, &fontFamily[0]);
+            }
 
-        out.resize(length);
+            fontFamily.resize(length);
+        }
+        return fontFamily;
+    }
+
+    std::string &getName() {
+        if (fontName.empty()) {
+            fontName.resize(50);
+            unsigned int length = 50;
+            if (hb_ot_name_get_utf8(font, HB_OT_NAME_ID_MAC_FULL_NAME, HB_LANGUAGE_INVALID, &length, &fontName[0]) ==
+                0) {
+                length = 50;
+                hb_ot_name_get_utf8(font, HB_OT_NAME_ID_FULL_NAME, HB_LANGUAGE_INVALID, &length, &fontName[0]);
+            }
+
+            fontName.resize(length);
+        }
+        return fontName;
+    }
+
+    std::string &getSubFamily() {
+        if (fontSubFamily.empty()) {
+            fontSubFamily.resize(50);
+            unsigned int length = 50;
+            if (hb_ot_name_get_utf8(
+                    font, HB_OT_NAME_ID_TYPOGRAPHIC_SUBFAMILY, HB_LANGUAGE_INVALID, &length, &fontSubFamily[0]) == 0) {
+                length = 50;
+                hb_ot_name_get_utf8(
+                    font, HB_OT_NAME_ID_FONT_SUBFAMILY, HB_LANGUAGE_INVALID, &length, &fontSubFamily[0]);
+            }
+            fontSubFamily.resize(length);
+        }
+        return fontSubFamily;
+    }
+
+    std::string &getPostScriptName() {
+        if (fontPostscriptName.empty()) {
+            fontPostscriptName.resize(50);
+            unsigned int length = 50;
+            hb_ot_name_get_utf8(
+                font, HB_OT_NAME_ID_POSTSCRIPT_NAME, HB_LANGUAGE_INVALID, &length, &fontPostscriptName[0]);
+            fontPostscriptName.resize(length);
+        }
+        return fontPostscriptName;
+    }
+
+    std::string runToString(std::vector<std::pair<std::vector<uint32_t>, int32_t>> run) {
+        auto toHex = [](uint32_t w, size_t hex_len = 4) -> std::string {
+            static const char *digits = "0123456789ABCDEF";
+            std::string rc(hex_len, '0');
+            for (size_t i = 0, j = (hex_len - 1) * 4; i < hex_len; ++i, j -= 4)
+                rc[i] = digits[(w >> j) & 0x0f];
+            return rc;
+        };
+        std::string out{"["};
+        for (auto &pair : run) {
+            out += '<';
+            for (auto &gid : pair.first)
+                out += toHex(CFF && cffTable->isCID ? cffTable->charset[gid] : gid);
+            out += '>';
+            out += std::to_string(pair.second);
+        }
+        out += ']';
         return out;
     }
 
-    std::string getName() {
-        std::string out;
-        out.resize(50);
-        unsigned int length = 50;
-        if (hb_ot_name_get_utf8(font, HB_OT_NAME_ID_MAC_FULL_NAME, HB_LANGUAGE_INVALID, &length, &out[0]) == 0) {
-            length = 50;
-            hb_ot_name_get_utf8(font, HB_OT_NAME_ID_FULL_NAME, HB_LANGUAGE_INVALID, &length, &out[0]);
-        }
-
-        out.resize(length);
-        return out;
-    }
-
-    std::string getSubFamily() {
-        std::string out;
-        out.resize(50);
-        unsigned int length = 50;
-        if (hb_ot_name_get_utf8(font, HB_OT_NAME_ID_TYPOGRAPHIC_SUBFAMILY, HB_LANGUAGE_INVALID, &length, &out[0]) ==
-            0) {
-            length = 50;
-            hb_ot_name_get_utf8(font, HB_OT_NAME_ID_FONT_SUBFAMILY, HB_LANGUAGE_INVALID, &length, &out[0]);
-        }
-        out.resize(length);
-        return out;
-    }
-
-    std::string getPostScriptName() {
-        std::string out;
-        out.resize(50);
-        unsigned int length = 50;
-        hb_ot_name_get_utf8(font, HB_OT_NAME_ID_POSTSCRIPT_NAME, HB_LANGUAGE_INVALID, &length, &out[0]);
-        out.resize(length);
-        return out;
+    bool isCFF() {
+        return CFF;
     }
 
     BBox getBoundingBox() {
@@ -209,15 +394,11 @@ class Font {
         return flags;
     }
 
-    std::function<void(Pipeline *)> makeSubsetFunction(Face &face, QPDFObjectHandle dict);
+    std::function<void(Pipeline *)> makeSubsetFunction(Face &face, bool subset = true);
     Face &makeFace();
 
     decltype(faces) &getFaces() {
         return faces;
-    }
-
-    FontManager &getManager() {
-        return manager;
     }
 };
 } // namespace PDFLib

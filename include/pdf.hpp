@@ -42,15 +42,15 @@ class Document {
     Document() : pages{(pdf.emptyPDF(), pdf)}, resources{QPDFObjectHandle::newDictionary()}, fontManager{*this} {};
 
     void finish() {
-        fontManager.embedFonts();
+        fontManager.embedFonts(true);
         resources.replaceKey("/Font", fontManager.getDictionary());
     }
 
     void write(std::filesystem::path path) {
         QPDFWriter w(pdf, path.c_str());
-        w.setCompressStreams(true);
-        w.setPreserveUnreferencedObjects(true);
-        w.setLinearization(true);
+        w.setCompressStreams(false);
+        w.setPreserveUnreferencedObjects(false);
+        w.setLinearization(false);
         w.setMinimumPDFVersion(PDFVersion(1, 6));
         w.write();
     }

@@ -44,8 +44,9 @@ inline std::string latinTest(FontManager &fontManager, double points, double lin
     bool left = true;
     double max = 0;
     for (auto &&[name, font] : fonts) {
-        auto &face = font.makeFace();
-        if (name.find("Noto ") != std::string::npos)
+        auto &face = font.getFaces()[0];
+        if (name.find("Noto ") != std::string::npos || name.find("Apple") != std::string::npos ||
+            name.find("PingFang") != std::string::npos)
             continue;
         double height = (face.getAscender() - face.getDescender()) * points / 1000.0;
         if (left)
@@ -56,30 +57,30 @@ inline std::string latinTest(FontManager &fontManager, double points, double lin
         left = !left;
     }
 
-    auto draw = [&](auto &face, auto &str, auto width, auto ypos, auto size, bool left) -> double {
-        double above = face.getAscender() * size / 1000.0;
-        double below = face.getDescender() * size / -1000.0;
-        double height = above + below;
-        double startx = left ? 25 : 595 - 25 - width;
-        if (showMetrics)
-            contents += "q 0.5 w [1 2] 0 d 0.6867 0.6867 0.6867 RG" +
-                        Line(startx, 842 - ypos - height, startx, 842 - ypos) +                  // left border
-                        Line(startx + width, 842 - ypos, startx + width, 842 - height - ypos) +  // right border
-                        Line(startx, 842 - ypos, startx + width, 842 - ypos) +                   // top border
-                        Line(startx, 842 - ypos - height, startx + width, 842 - ypos - height) + // bottom border
-                        Line(startx, 842 - ypos - above, startx + width, 842 - ypos - above) +   // baseline
-                        " S Q";
-        contents += Text(startx, 842 - above - ypos, face, str, size);
-        return height;
-    };
-
     double ypos = (842 - ytotal) / 2;
     left = true;
     max = 0;
     double prevWidth = 0;
     double subpoints = points / 2.0;
     for (auto &&[name, font] : fonts) {
-        if (name.find("Noto ") != std::string::npos)
+        auto draw = [&](auto &face, auto &font, auto &str, auto width, auto ypos, auto size, bool left) -> double {
+            double above = face.getAscender() * size / 1000.0;
+            double below = face.getDescender() * size / -1000.0;
+            double height = above + below;
+            double startx = left ? 25 : 595 - 25 - width;
+            if (showMetrics)
+                contents += "q 0.5 w [1 2] 0 d 0.6867 0.6867 0.6867 RG" +
+                            Line(startx, 842 - ypos - height, startx, 842 - ypos) +                  // left border
+                            Line(startx + width, 842 - ypos, startx + width, 842 - height - ypos) +  // right border
+                            Line(startx, 842 - ypos, startx + width, 842 - ypos) +                   // top border
+                            Line(startx, 842 - ypos - height, startx + width, 842 - ypos - height) + // bottom border
+                            Line(startx, 842 - ypos - above, startx + width, 842 - ypos - above) +   // baseline
+                            " S Q";
+            contents += Text(startx, 842 - above - ypos, face, font.runToString(str), size);
+            return height;
+        };
+        if (name.find("Noto ") != std::string::npos || name.find("Apple") != std::string::npos ||
+            name.find("PingFang") != std::string::npos)
             continue;
         auto &face = font.getFaces()[0];
         try {
@@ -90,8 +91,8 @@ inline std::string latinTest(FontManager &fontManager, double points, double lin
                 left = true;
                 ypos += max * lineSpacing;
             }
-            auto height = draw(face, title, width, ypos, points, left);
-            draw(face, subtitle, subwidth, ypos + height + 4, subpoints, left);
+            auto height = draw(face, font, title, width, ypos, points, left);
+            draw(face, font, subtitle, subwidth, ypos + height + 4, subpoints, left);
             if (left) {
                 max = height;
                 prevWidth = width;
@@ -108,9 +109,8 @@ inline std::string latinTest(FontManager &fontManager, double points, double lin
     return contents;
 }
 
-inline std::pair<std::string, double> CJKTest(FontManager &fontManager) {
+inline double CJKTest(FontManager &fontManager, std::string &contents) {
     int points = 15;
-    std::string contents;
     double pos = 40;
     for (auto &&[name, font] : fontManager.getFonts()) {
         auto &face = font.getFaces()[0];
@@ -118,10 +118,7 @@ inline std::pair<std::string, double> CJKTest(FontManager &fontManager) {
             std::string_view("人皆生而自由；在尊嚴及權利上均各平等！人各賦有理性良知，誠應和睦相處，情"),
             std::string_view("同手足鑑於對人類家庭所有成員的固有尊嚴及其平等的和不移的權利的承認，乃是"),
             std::string_view("世界自由、正鑑於各聯合國國家的人民已在聯合國憲章中重申他們對基本人權、人"),
-            std::string_view("格尊嚴和價值以及男大會，發布這一世界人權宣言，作為所有人民和所有國家努力"),
-            std::string_view("期每一個人和社會機構經常銘念本宣言，努力通過教誨和教育促進對權利和自由的"),
-            std::string_view("尊重，並通過國家的和國際的漸進措施，使這些權利和自由在各會員鑑於對人類家"),
-            std::string_view("庭所有成員的固有尊嚴及其平等的和不移的權利的承認，乃是世界自由、正義與和"),
+            std::string_view("格尊嚴和價值以及男大會，發布這一世界人權宣言，作為所有人民和所有國家努。"),
         };
         try {
             double above = face.getAscender() * points / 1000.0;
@@ -129,20 +126,20 @@ inline std::pair<std::string, double> CJKTest(FontManager &fontManager) {
             double height = above + below;
             for (const auto &line : lines) {
                 auto &&[width, text] = face.shape(line, points, HB_SCRIPT_HAN, HB_DIRECTION_LTR, "CN");
-                contents += Text((595.0 - width) / 2.0, 842 - pos, face, text, points);
+                contents += Text((595.0 - width) / 2.0, 842 - pos, face, font.runToString(text), points);
                 pos += height;
             }
             pos += 40;
+            break;
         } catch (std::runtime_error e) {
             continue;
         }
     }
-    return {contents, pos};
+    return pos;
 }
 
-inline std::string ArabicTest(FontManager &fontManager, double &pos) {
+inline void ArabicTest(FontManager &fontManager, double &pos, std::string &contents) {
     int points = 15;
-    std::string contents;
     for (auto &&[name, font] : fontManager.getFonts()) {
         auto &face = font.getFaces()[0];
         const std::vector<std::string_view> lines{
@@ -156,28 +153,25 @@ inline std::string ArabicTest(FontManager &fontManager, double &pos) {
             double height = above + below;
             for (const auto &line : lines) {
                 auto &&[width, text] = face.shape(line, points, HB_SCRIPT_ARABIC, HB_DIRECTION_RTL, "AR");
-                contents += Text(595 - 25 - width, 842 - pos, face, text, points);
+                contents += Text(595 - 25 - width, 842 - pos, face, font.runToString(text), points);
                 pos += height * 1.14;
             }
-            pos += 40;
         } catch (std::runtime_error e) {
             continue;
         }
+        pos += 40;
     }
-    return contents;
 }
-inline std::string DevanagariTest(FontManager &fontManager, double &pos) {
+inline void DevanagariTest(FontManager &fontManager, double &pos, std::string &contents) {
     int points = 15;
-    std::string contents;
     for (auto &&[name, font] : fontManager.getFonts()) {
         auto &face = font.getFaces()[0];
         const std::vector<std::string_view> lines{
             std::string_view(
-                "सबिन मानमि कोअः हियातिङ अन्डोः एकतियर को रेयः मामले रे जोनोमेए तेगे दनामुल अन्डोः बराबरि रेयः नमा कना"),
+                "सबिन मानमि कोअ हियातिङ अन्डो एकतियर को रेय मामले रे जोनोमेए तेगे दनामुल अन्डोः बराबरि रेयः नमा कना"),
             std::string_view(
-                "इनिकु बुद्दि अन्डोः जिबोन बितर रेयः एनेम नमा कना अन्डोः अकोअको रे हगेयाबोहया (भाईचारे) रेयः जिबोन उङुः"),
-            std::string_view(
-                "तेको जानागर तेयः दोरकर। सबिन मानमि कोअः हियातिङ अन्डोः एकतियर को रेयः मामले रे जोनोमेए तेगे दनामुल"),
+                "इनिकु बुद्दि अन्डो जिबोन बितर रेयः एनेम नमा कना अन्डो अकोअको रे हगेयाबोहया (भाईचारे) रेयः जिबोन उङुः"),
+            std::string_view("तेको जानागर तेयः दोरकर। सबिन मानमि कोअ हियातिङ अन्डोः एकतियर को रेयः मामले रे जोनोमेए तेगेदनामुल"),
             std::string_view("अन्डोः बराबरि रेयः नमा कना। इनिकु बुद्दि अन्डोः जिबोन बितर रेयः एनेम"),
         };
         try {
@@ -186,25 +180,24 @@ inline std::string DevanagariTest(FontManager &fontManager, double &pos) {
             double height = above + below;
             for (const auto &line : lines) {
                 auto &&[width, text] = face.shape(line, points, HB_SCRIPT_DEVANAGARI, HB_DIRECTION_LTR, "HI");
-                contents += Text(25, 842 - pos, face, text, points);
+                contents += Text(25, 842 - pos, face, font.runToString(text), points);
                 pos += height * 1.14;
             }
-            pos += 40;
         } catch (std::runtime_error e) {
             continue;
         }
+        pos += 40;
     }
-    return contents;
 }
-inline std::string EthiopicTest(FontManager &fontManager, double &pos) {
+inline void EthiopicTest(FontManager &fontManager, double &pos, std::string &contents) {
     int points = 15;
-    std::string contents;
     for (auto &&[name, font] : fontManager.getFonts()) {
         auto &face = font.getFaces()[0];
         const std::vector<std::string_view> lines{
             std::string_view("ተወልዱ፡ኵሉ፡ሰብእ፡ግዑዛን፡ወዕሩያን፡በማዕረግ፡ወብሕግ።ቦሙ፡ኅሊና፡ወዐቅል፡ወይትጌበሩ፡አሐዱ፡ ምስለ፡አ"),
             std::string_view("ሀዱ፡በመንፈሰ፡እኍና። ተወልዱ፡ኵሉ፡ሰብእ፡ግዑዛን፡ወዕሩያን፡በማዕረግ፡ወብሕግ።ቦሙ፡ኅሊና፡ወዐቅል፡ወይት"),
-            std::string_view("ጌበሩ፡አሐዱ፡ ምስለ፡አሀዱ፡በመንፈሰ፡እኍና።"),
+            std::string_view("በሩ፡አሐዱ፡ ምስለ፡አሀዱ፡በመንፈሰ፡እበማዕረግ፡ወብሕግ።ቦሙ፡ኅግዑዛሕን፡ወብሕግዕሊና፡ወዐቅል፡ወኍና።"),
+            std::string_view("ጌበሩወዕሩያን፡በማዕረግ፡ወብሕግ።ቦሙ፡ኅሊና፡ወዐቅል፡ወይ"),
         };
         try {
             double above = face.getAscender() * points / 1000.0;
@@ -212,15 +205,36 @@ inline std::string EthiopicTest(FontManager &fontManager, double &pos) {
             double height = above + below;
             for (const auto &line : lines) {
                 auto &&[width, text] = face.shape(line, points, HB_SCRIPT_ETHIOPIC, HB_DIRECTION_LTR, "AM");
-                contents += Text(25, 842 - pos, face, text, points);
+                contents += Text((595.0 - width) / 2.0, 842 - pos, face, font.runToString(text), points);
                 pos += height * 1.14;
             }
-            pos += 40;
+        } catch (std::runtime_error e) {
+            continue;
+        }
+        pos += 40;
+    }
+}
+inline void EmojiTest(FontManager &fontManager, double &pos, std::string &contents) {
+    int points = 15;
+    for (auto &&[name, font] : fontManager.getFonts()) {
+        auto &face = font.getFaces()[0];
+        const std::vector<std::string_view> lines{
+            std::string_view("☺︎☺︎☺︎☺︎"),
+        };
+        try {
+            double above = face.getAscender() * points / 1000.0;
+            double below = face.getDescender() * points / -1000.0;
+            double height = above + below;
+            for (const auto &line : lines) {
+                auto &&[width, text] = face.shape(line, points, HB_SCRIPT_LATIN, HB_DIRECTION_LTR, "EN");
+                contents += Text((595.0 - width) / 2.0, 842 - pos, face, font.runToString(text), points);
+                pos += height;
+            }
+            pos += 38;
         } catch (std::runtime_error e) {
             continue;
         }
     }
-    return contents;
 }
 
 // takes font point size (double), line-spacing (double), and show-metrics (bool)
@@ -238,7 +252,7 @@ int main(int argc, char *argv[]) {
     } else {
         points = 20;
         lineSpacing = 2.6;
-        showMetrics = false;
+        showMetrics = true;
     }
     Document doc;
     FontManager &fontManager = doc.getFontManager();
@@ -247,18 +261,23 @@ int main(int argc, char *argv[]) {
     std::filesystem::path fontDir(Config::fonts);
 
     for (auto &&file : std::filesystem::directory_iterator(fontDir)) {
-        if (std::set<std::string>({".ttf", ".ttc", ".otf"}).contains(file.path().extension()))
-            fontManager.loadFontFile(file);
+        if (std::set<std::string>({".ttf", ".ttc", ".otf"}).contains(file.path().extension())) {
+            auto out = fontManager.loadFontFile(file);
+            for (auto &f : out)
+                fontManager.getFromName(f).makeFace();
+        }
     }
 
     doc.createPage().setContents(latinTest(fontManager, points, lineSpacing, showMetrics));
 
-    std::string multiLingual = "q 0.18824 0.18824 0.18824 rg 0 0 600 850 re F Q ";
-    auto &&[cjk, pos] = CJKTest(fontManager);
-    auto &&ar = ArabicTest(fontManager, pos);
-    auto &&dev = DevanagariTest(fontManager, pos);
-    auto &&eth = EthiopicTest(fontManager, pos);
-    multiLingual += cjk + ar + dev + eth;
+    std::string multiLingual;
+    multiLingual.reserve(2000);
+    multiLingual.append("q 0.18824 0.18824 0.18824 rg 0 0 600 850 re F Q ");
+    double pos = CJKTest(fontManager, multiLingual);
+    ArabicTest(fontManager, pos, multiLingual);
+    DevanagariTest(fontManager, pos, multiLingual);
+    EthiopicTest(fontManager, pos, multiLingual);
+    EmojiTest(fontManager, pos, multiLingual);
 
     doc.createPage().setContents(multiLingual);
     doc.finish();
