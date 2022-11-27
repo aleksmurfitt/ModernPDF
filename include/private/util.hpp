@@ -4,26 +4,20 @@
 
 namespace PDFLib {
 namespace Util {
-template <typename T, auto deleter, auto initialiser = nullptr, bool owning = true> class PtrHolder {
-    using SafeT = std::unique_ptr<T, decltype([](T *ptr) {
-                                      if constexpr (owning)
-                                          deleter(ptr);
-                                  })>;
-    SafeT object;
-
-  public:
-    // Basically a std::make_unique for C functions
-    // Enable if initialiser is set
-    template <auto W = initialiser,
-              typename std::enable_if<!std::is_same_v<decltype(W), std::nullptr_t>, int>::type = 0>
-    PtrHolder(auto &&...args) : object{initialiser(std::forward<decltype(args)>(args)...)} {};
-
-    PtrHolder(T *object) : object{object} {};
-
-    operator T *() {
-        return object.get();
+template <size_t N> struct StringLiteral {
+    constexpr StringLiteral(const char (&str)[N]) {
+        std::copy_n(str, N, value);
     }
+    constexpr char operator[](size_t i) const {
+        return value[i];
+    }
+    char value[N];
+    size_t size = N;
 };
+
+template <StringLiteral c>
+constexpr unsigned int tag = (static_cast<unsigned int>(c[0]) << 24) | (static_cast<unsigned int>(c[1]) << 16) |
+                             (static_cast<unsigned int>(c[2]) << 8) | c[3];
 } // namespace Util
 } // namespace PDFLib
 

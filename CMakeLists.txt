@@ -4,7 +4,7 @@ if(${CMAKE_VERSION} VERSION_LESS 3.19)
     cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
 project(PDF-Generator VERSION 1.0
-                  DESCRIPTION "Component to generate Thirdfort PDFs"
+                  DESCRIPTION "Library to generate PDFs"
                   LANGUAGES CXX)
 
 include(cmake/collect_dependencies.cmake)

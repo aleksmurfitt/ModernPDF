@@ -22,19 +22,23 @@ class Document;
 
 class Face {
     SubsetInputHolder subsetInput;
-    UnicodeSetHolder glyphSet;
+    GlyphSetHolder glyphSet;
     FaceHolder face;
     double scale;
     const std::string handle;
 
   public:
+    std::set<std::string> charSet;
     Face(FaceHolder face, double scale, std::string handle);
 
     double getAscender();
     double getDescender();
+    double getLineGap();
     int getCapHeight();
     float getItalicAngle();
-    std::pair<float, std::string> shape(std::string text, float points);
+    std::pair<float, std::vector<std::pair<std::vector<uint32_t>, int32_t>>>
+    shape(std::string_view text, float points, hb_script_t script = HB_SCRIPT_LATIN,
+          hb_direction_t direction = HB_DIRECTION_LTR, std::string_view language = "en");
     float getHeight(std::string text);
     int getWeight() {
         return hb_style_get_value(face, HB_STYLE_TAG_WEIGHT);
@@ -45,7 +49,7 @@ class Face {
     float getSlantAngle() {
         return hb_style_get_value(face, HB_STYLE_TAG_SLANT_ANGLE);
     }
-    UnicodeSetHolder &getUsedGlyphs() {
+    GlyphSetHolder &getUsedGlyphs() {
         return glyphSet;
     }
     hb_codepoint_t getGlyph(hb_codepoint_t unicodeCodepoint) {

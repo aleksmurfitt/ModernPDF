@@ -46,8 +46,9 @@ class FontManager {
         return dictionary;
     }
 
-    std::vector<std::string> loadFontFile(std::filesystem::path file);
-    void embedFonts();
+    std::vector<std::string> loadFontFile(std::filesystem::path file, uint32_t startIndex = 0,
+                                          std::optional<uint32_t> maxFonts = std::nullopt);
+    void embedFonts(bool subset = true);
 };
 }; // namespace PDFLib
 #endif
