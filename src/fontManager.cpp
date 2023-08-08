@@ -1,6 +1,5 @@
 #define POINTERHOLDER_TRANSITION 3
 #include "fontManager.hpp"
-
 #include "pdf.hpp"
 
 #include <limits>
@@ -11,11 +10,51 @@ FontManager::FontManager(Document &document)
     : document{document},
       dictionary{document.newIndirectObject(QPDFObjectHandle::newDictionary())} {};
 
+std::vector<QPDFObjectHandle> glyphAdvances(Face &face, Font &font, bool subset) {
+    std::vector<QPDFObjectHandle> glyphAdvances{};
+    auto &glyphs = face.getUsedGlyphs();
+    size_t max = (subset ? hb_set_get_max(glyphs) : hb_face_get_glyph_count(font.getHbObj()));
+    size_t min = (subset ? hb_set_get_min(glyphs) : 0);
+    size_t pop = (subset ? hb_set_get_population(glyphs) : hb_face_get_glyph_count(font.getHbObj()));
+    if (subset)
+        for (uint32_t i = HB_SET_VALUE_INVALID; hb_set_next(glyphs, &i);) {
+            uint32_t adv = face.getGlyphAdvance(i);
+            if (adv == 1000)
+                continue;
+            glyphAdvances.push_back(QPDFObjectHandle::newInteger(i));
+            std::vector<QPDFObjectHandle> advances{};
+            while (i <= max) {
+                advances.push_back(QPDFObjectHandle::newInteger(adv));
+                if (!hb_set_has(glyphs, ++i))
+                    break;
+                adv = face.getGlyphAdvance(i);
+                if (adv == 1000)
+                    break;
+            }
+            glyphAdvances.push_back(QPDFObjectHandle::newArray(advances));
+        }
+    else
+        for (uint32_t i = min; i < max; i++) {
+            uint32_t adv = face.getGlyphAdvance(i);
+            if (adv == 1000)
+                continue;
+            glyphAdvances.push_back(QPDFObjectHandle::newInteger(i));
+            std::vector<QPDFObjectHandle> advances{};
+            while (i <= max) {
+                advances.push_back(QPDFObjectHandle::newInteger(adv));
+                adv = face.getGlyphAdvance(++i);
+                if (adv == 1000)
+                    break;
+            }
+            glyphAdvances.push_back(QPDFObjectHandle::newArray(advances));
+        }
+    return glyphAdvances;
+};
 // We embed fonts at the end
 void FontManager::embedFonts(bool subset) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> distrib('A', 'Z');
+    std::uniform_int_distribution distrib(static_cast<short>('A'), static_cast<short>('Z'));
 
     for (auto &&[key, font] : fonts) {
         auto &faces = font.getFaces();
@@ -52,62 +91,16 @@ void FontManager::embedFonts(bool subset) {
             descendantFontDictionary.replaceKey("/Type", QPDFObjectHandle::newName("/Font"));
             descendantFontDictionary.replaceKey(
                 "/Subtype", QPDFObjectHandle::newName(font.isCFF() ? "/CIDFontType0" : "/CIDFontType2"));
+
             if (!font.isCFF())
                 descendantFontDictionary.replaceKey("/CIDToGIDMap", QPDFObjectHandle::newName("/Identity"));
             descendantFontDictionary.replaceKey("/BaseFont", QPDFObjectHandle::newName(name));
             descendantFontDictionary.replaceKey("/CIDSystemInfo", CIDSystemInfo);
             descendantFontDictionary.replaceKey("/FontDescriptor", fontDescriptor);
-            {
-                auto &glyphs = face.getUsedGlyphs();
-                size_t max = (subset ? hb_set_get_max(glyphs) : hb_face_get_glyph_count(font.getHbObj()));
-                size_t min = (subset ? hb_set_get_min(glyphs) : 0);
-                size_t pop = (subset ? hb_set_get_population(glyphs) : hb_face_get_glyph_count(font.getHbObj()));
-                // {
-                //     std::vector<uint32_t> vec;
-                //     vec.reserve(pop);
-                //     for (uint32_t i = HB_SET_VALUE_INVALID; hb_set_next(glyphs, &i);) {
-                //         uint32_t adv = face.getGlyphAdvance(i);
-                //         vec.insert(std::upper_bound(vec.begin(), vec.end(), i), i);
-                //     }
-                // }
-                {
-                    std::vector<QPDFObjectHandle> glyphAdvances{};
-                    if (subset)
-                        for (uint32_t i = HB_SET_VALUE_INVALID; hb_set_next(glyphs, &i);) {
-                            uint32_t adv = face.getGlyphAdvance(i);
-                            if (adv == 1000)
-                                continue;
-                            glyphAdvances.push_back(QPDFObjectHandle::newInteger(i));
-                            std::vector<QPDFObjectHandle> advances{};
-                            while (i <= max) {
-                                advances.push_back(QPDFObjectHandle::newInteger(adv));
-                                if (!hb_set_has(glyphs, ++i))
-                                    break;
-                                adv = face.getGlyphAdvance(i);
-                                if (adv == 1000)
-                                    break;
-                            }
-                            glyphAdvances.push_back(QPDFObjectHandle::newArray(advances));
-                        }
-                    else
-                        for (uint32_t i = min; i < max; i++) {
-                            uint32_t adv = face.getGlyphAdvance(i);
-                            if (adv == 1000)
-                                continue;
-                            glyphAdvances.push_back(QPDFObjectHandle::newInteger(i));
-                            std::vector<QPDFObjectHandle> advances{};
-                            while (i <= max) {
-                                advances.push_back(QPDFObjectHandle::newInteger(adv));
-                                adv = face.getGlyphAdvance(++i);
-                                if (adv == 1000)
-                                    break;
-                            }
-                            glyphAdvances.push_back(QPDFObjectHandle::newArray(advances));
-                        }
-                    descendantFontDictionary.replaceKey(
-                        "/W", document.newIndirectObject(QPDFObjectHandle::newArray(glyphAdvances)));
-                }
-            }
+
+            descendantFontDictionary.replaceKey(
+                "/W", document.newIndirectObject(QPDFObjectHandle::newArray(glyphAdvances(face, font, subset))));
+
             fontDictionary.replaceKey("/Type", QPDFObjectHandle::newName("/Font"));
             fontDictionary.replaceKey("/Subtype", QPDFObjectHandle::newName("/Type0"));
             fontDictionary.replaceKey("/BaseFont", QPDFObjectHandle::newName(name));
