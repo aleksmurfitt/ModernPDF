@@ -112,7 +112,15 @@ inline std::string latinTest(FontManager &fontManager, double points, double lin
 inline double CJKTest(FontManager &fontManager, std::string &contents) {
     int points = 15;
     double pos = 40;
+    bool ping = false;
     for (auto &&[name, font] : fontManager.getFonts()) {
+
+        if (name.find("Ping") != std::string::npos){
+            if(!ping)
+                ping = true;
+            else
+                continue;
+        }
         auto &face = font.getFaces()[0];
         const std::vector<std::string_view> lines{
             std::string_view("人皆生而自由；在尊嚴及權利上均各平等！人各賦有理性良知，誠應和睦相處，情"),
@@ -129,9 +137,8 @@ inline double CJKTest(FontManager &fontManager, std::string &contents) {
                 contents += Text((595.0 - width) / 2.0, 842 - pos, face, font.runToString(text), points);
                 pos += height;
             }
-            pos += 40;
-            break;
         } catch (std::runtime_error e) {
+            std::cout << "Missing glyphs from " << name << "\n";
             continue;
         }
     }
@@ -159,7 +166,6 @@ inline void ArabicTest(FontManager &fontManager, double &pos, std::string &conte
         } catch (std::runtime_error e) {
             continue;
         }
-        pos += 40;
     }
 }
 inline void DevanagariTest(FontManager &fontManager, double &pos, std::string &contents) {
@@ -186,7 +192,6 @@ inline void DevanagariTest(FontManager &fontManager, double &pos, std::string &c
         } catch (std::runtime_error e) {
             continue;
         }
-        pos += 40;
     }
 }
 inline void EthiopicTest(FontManager &fontManager, double &pos, std::string &contents) {
@@ -211,7 +216,6 @@ inline void EthiopicTest(FontManager &fontManager, double &pos, std::string &con
         } catch (std::runtime_error e) {
             continue;
         }
-        pos += 40;
     }
 }
 inline void EmojiTest(FontManager &fontManager, double &pos, std::string &contents) {
@@ -230,7 +234,6 @@ inline void EmojiTest(FontManager &fontManager, double &pos, std::string &conten
                 contents += Text((595.0 - width) / 2.0, 842 - pos, face, font.runToString(text), points);
                 pos += height;
             }
-            pos += 38;
         } catch (std::runtime_error e) {
             continue;
         }
