@@ -7,13 +7,14 @@
 #include <qpdf/QUtil.hh>
 
 #include <iostream>
+#include <utility>
 using namespace PDFLib;
 Face::Face(FaceHolder face, double scale, std::string handle)
     : glyphSet{subsetInput},
       charSet{},
       face{std::move(face)},
       scale{scale},
-      handle{handle} {};
+      handle{std::move(handle)} {};
 
 double Face::getAscender() {
     hb_font_extents_t extents;
@@ -43,13 +44,13 @@ int Face::getCapHeight() {
 }
 
 std::pair<float, std::vector<std::pair<std::vector<uint32_t>, int32_t>>> Face::shape(std::string_view text,
-                                                                                     float points, hb_script_t script,
+                                                                                     float points, iso_script_tag script,
                                                                                      hb_direction_t direction,
                                                                                      std::string_view language) {
     BufferHolder buffer;
     hb_buffer_add_utf8(buffer, text.begin(), -1, 0, -1);
     hb_buffer_set_direction(buffer, direction);
-    hb_buffer_set_script(buffer, script);
+    hb_buffer_set_script(buffer, static_cast<hb_script_t>(Util::as_tag(script.iso_tag)));
     hb_buffer_set_language(buffer, hb_language_from_string(language.begin(), -1));
     hb_shape(face, buffer, NULL, 0);
 
@@ -61,7 +62,6 @@ std::pair<float, std::vector<std::pair<std::vector<uint32_t>, int32_t>>> Face::s
     }
     hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(buffer, &glyph_count);
     float width = 0;
-    float height = getAscender() - getDescender();
     std::vector<std::pair<std::vector<uint32_t>, int32_t>> runs;
     runs.emplace_back();
     for (unsigned int i = 0; i < glyph_count; i++) {

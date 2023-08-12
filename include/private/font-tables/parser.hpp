@@ -11,7 +11,12 @@ namespace PDFLib {
 // A stateful helper class
 template <typename T> struct BasicParser {
     size_t offset = 0;
-    template <typename Type = uint16_t> Type getNext() {
+    /**
+     * @brief Get the next `sizeof(Type)` bytes as a `Type`
+     * @tparam Type The integral type the data should be parsed as
+     * @return The parsed bytes as a `Type` object
+     */
+    template <std::integral Type = uint16_t> Type getNext() {
         Type out = *(static_cast<const T *>(this)->startPtr + offset++);
         if constexpr (sizeof(Type) > 1)
             for (size_t i = 1; i < sizeof(Type); i++) {
@@ -20,7 +25,11 @@ template <typename T> struct BasicParser {
             }
         return out;
     }
-
+    /**
+     * @brief Get the next `size` bytes as a size_t
+     * @param size Number of bytes to return
+     * @return The parsed bytes as a `size_t`
+     */
     size_t getNext(size_t size) {
         size_t out = *(static_cast<const T *>(this)->startPtr + offset++);
         for (size_t i = 1; i < size; i++) {
@@ -29,10 +38,15 @@ template <typename T> struct BasicParser {
         }
         return out;
     }
+    /**
+     * @brief Get the next `count` bytes as a `std::span<Type>`.
+     * @param count Number of elements to return
+     * @return A `std::span<Type>` containing `count` elements
+     */
     template <typename Type = uint8_t> std::span<const Type> getBytes(size_t count) {
         std::span<const Type> out{reinterpret_cast<const Type *>(static_cast<const T *>(this)->startPtr + offset),
                                   count};
-        offset += count;
+        offset += count * sizeof(Type);
         return out;
     }
 

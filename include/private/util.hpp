@@ -4,20 +4,24 @@
 
 namespace PDFLib {
 namespace Util {
-template <size_t N> struct StringLiteral {
-    constexpr StringLiteral(const char (&str)[N]) {
+template <size_t N> struct sized_string_literal {
+    consteval sized_string_literal(const char (&str)[N]) {
         std::copy_n(str, N, value);
     }
-    constexpr char operator[](size_t i) const {
+    consteval char operator[](size_t i) const {
         return value[i];
     }
     char value[N];
     size_t size = N;
 };
 
-template <StringLiteral c>
-constexpr unsigned int tag = (static_cast<unsigned int>(c[0]) << 24) | (static_cast<unsigned int>(c[1]) << 16) |
-                             (static_cast<unsigned int>(c[2]) << 8) | c[3];
+constexpr unsigned int as_tag(std::string_view c){
+    return (static_cast<unsigned int>(c[0]) << 24) | (static_cast<unsigned int>(c[1]) << 16) |
+           (static_cast<unsigned int>(c[2]) << 8) | c[3];
+}
+
+template <sized_string_literal c>
+constexpr unsigned int tag = as_tag(c.value);
 } // namespace Util
 } // namespace PDFLib
 

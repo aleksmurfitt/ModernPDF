@@ -15,6 +15,8 @@
     #include <optional>
     #include <string_view>
     #include <vector>
+    #include "private/util.hpp"
+    #include "private/script_language.hpp"
 
 namespace PDFLib {
 class Font;
@@ -37,7 +39,7 @@ class Face {
     int getCapHeight();
     float getItalicAngle();
     std::pair<float, std::vector<std::pair<std::vector<uint32_t>, int32_t>>>
-    shape(std::string_view text, float points, hb_script_t script = HB_SCRIPT_LATIN,
+    shape(std::string_view text, float points, iso_script_tag script = iso_script_tag{"Latin"},
           hb_direction_t direction = HB_DIRECTION_LTR, std::string_view language = "en");
     float getHeight(std::string text);
     int getWeight() {

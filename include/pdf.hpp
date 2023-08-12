@@ -1,6 +1,6 @@
 #if !defined(PDFLIB_DOCUMENT_H)
     #define PDFLIB_DOCUMENT_H
-    #include "config.hpp"
+    #include "doc_config.hpp"
     #include "fontManager.hpp"
 
     #include <qpdf/QPDF.hh>

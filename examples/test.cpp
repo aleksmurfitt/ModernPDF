@@ -12,6 +12,7 @@
 #include <set>
 #include <thread>
 #include <vector>
+#include "private/script_language.hpp"
 
 using namespace PDFLib;
 constexpr auto timer = [](auto &&func, auto &&...params) -> std::chrono::duration<double, std::milli> {
@@ -133,11 +134,11 @@ inline double CJKTest(FontManager &fontManager, std::string &contents) {
             double below = face.getDescender() * points / -1000.0;
             double height = above + below;
             for (const auto &line : lines) {
-                auto &&[width, text] = face.shape(line, points, HB_SCRIPT_HAN, HB_DIRECTION_LTR, "CN");
+                auto &&[width, text] = face.shape(line, points, "Han (Hanzi, Kanji, Hanja)", HB_DIRECTION_LTR, "CN");
                 contents += Text((595.0 - width) / 2.0, 842 - pos, face, font.runToString(text), points);
                 pos += height;
             }
-        } catch (std::runtime_error e) {
+        } catch (std::runtime_error& e) {
             std::cout << "Missing glyphs from " << name << "\n";
             continue;
         }
@@ -159,11 +160,11 @@ inline void ArabicTest(FontManager &fontManager, double &pos, std::string &conte
             double below = face.getDescender() * points / -1000.0;
             double height = above + below;
             for (const auto &line : lines) {
-                auto &&[width, text] = face.shape(line, points, HB_SCRIPT_ARABIC, HB_DIRECTION_RTL, "AR");
+                auto &&[width, text] = face.shape(line, points, "Arabic", HB_DIRECTION_RTL, "AR");
                 contents += Text(595 - 25 - width, 842 - pos, face, font.runToString(text), points);
                 pos += height * 1.14;
             }
-        } catch (std::runtime_error e) {
+        } catch (std::runtime_error& e) {
             continue;
         }
     }
@@ -185,11 +186,11 @@ inline void DevanagariTest(FontManager &fontManager, double &pos, std::string &c
             double below = face.getDescender() * points / -1000.0;
             double height = above + below;
             for (const auto &line : lines) {
-                auto &&[width, text] = face.shape(line, points, HB_SCRIPT_DEVANAGARI, HB_DIRECTION_LTR, "HI");
+                auto &&[width, text] = face.shape(line, points, "Devanagari (Nagari)", HB_DIRECTION_LTR, "HI");
                 contents += Text(25, 842 - pos, face, font.runToString(text), points);
                 pos += height * 1.14;
             }
-        } catch (std::runtime_error e) {
+        } catch (std::runtime_error& e) {
             continue;
         }
     }
@@ -209,11 +210,11 @@ inline void EthiopicTest(FontManager &fontManager, double &pos, std::string &con
             double below = face.getDescender() * points / -1000.0;
             double height = above + below;
             for (const auto &line : lines) {
-                auto &&[width, text] = face.shape(line, points, HB_SCRIPT_ETHIOPIC, HB_DIRECTION_LTR, "AM");
+                auto &&[width, text] = face.shape(line, points, "Ethiopic (Geʻez)", HB_DIRECTION_LTR, "AM");
                 contents += Text((595.0 - width) / 2.0, 842 - pos, face, font.runToString(text), points);
                 pos += height * 1.14;
             }
-        } catch (std::runtime_error e) {
+        } catch (std::runtime_error& e) {
             continue;
         }
     }
@@ -230,11 +231,11 @@ inline void EmojiTest(FontManager &fontManager, double &pos, std::string &conten
             double below = face.getDescender() * points / -1000.0;
             double height = above + below;
             for (const auto &line : lines) {
-                auto &&[width, text] = face.shape(line, points, HB_SCRIPT_LATIN, HB_DIRECTION_LTR, "EN");
+                auto &&[width, text] = face.shape(line, points);
                 contents += Text((595.0 - width) / 2.0, 842 - pos, face, font.runToString(text), points);
                 pos += height;
             }
-        } catch (std::runtime_error e) {
+        } catch (std::runtime_error& e) {
             continue;
         }
     }
@@ -285,5 +286,6 @@ int main(int argc, char *argv[]) {
     doc.createPage().setContents(multiLingual);
     doc.finish();
     doc.write(Config::output / "test.pdf");
+    std::cout << iso_script_tag("Mayan hieroglyphs").iso_tag;
     return 0;
 };

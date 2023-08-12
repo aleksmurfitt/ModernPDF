@@ -33,6 +33,9 @@ class Font {
     class CFFTable {
         FontTableParser parser;
         static constexpr uint32_t Tag = Util::tag<"CFF ">;
+        /**
+         * @brief Skips the index table
+         */
         void skipIndex() {
             std::vector<size_t> offsets{};
             size_t count = parser.getNext<uint16_t>();
@@ -48,9 +51,10 @@ class Font {
 
             return;
         };
-        template <typename T> std::vector<std::span<const T>> parseIndex() {
+
+        std::vector<std::span<const uint8_t>> parseIndex() {
             std::vector<size_t> offsets{};
-            std::vector<std::span<const T>> objects{};
+            std::vector<std::span<const uint8_t>> objects{};
             size_t count = parser.getNext<uint16_t>();
             if (count == 0)
                 return objects;
@@ -60,7 +64,7 @@ class Font {
                 offsets.push_back(parser.getNext(offsetSize));
 
             for (size_t i = 0; i < count; ++i)
-                objects.push_back(parser.getBytes<T>((offsets[i + 1] - offsets[i])));
+                objects.push_back(parser.getBytes<uint8_t>((offsets[i + 1] - offsets[i])));
 
             return objects;
         };
@@ -68,7 +72,7 @@ class Font {
         void parseFloatOperand(Parser &parser) {
             const uint8_t eof = 15;
             while (true) {
-                const uint8_t b = parser.getNext<uint8_t>();
+                std::integral auto b = parser.getNext<uint8_t>();
                 const uint8_t n1 = b >> 4;
                 const uint8_t n2 = b & 15;
                 if (n1 == eof || n2 == eof) {
@@ -152,7 +156,7 @@ class Font {
                     }
                 }
             } else
-                throw new std::runtime_error("Unknown charset format");
+                throw std::runtime_error("Unknown charset format");
             return charset;
         }
 
@@ -168,11 +172,11 @@ class Font {
             parser.moveTo(4);
             // Skip names
             skipIndex();
-            auto topDictIndex = parseIndex<uint8_t>();
+            auto topDictIndex = parseIndex();
             if (topDictIndex.size() == 0)
                 return;
             auto topDict = parseDict(topDictIndex[0]);
-            if (topDict.contains(1230) && topDict[1230][0] != 0xFF | topDict[1230][1] != 0xFF)
+            if (topDict.contains(1230) && (topDict[1230][0] != 0xFF || topDict[1230][1] != 0xFF))
                 isCID = true;
             if (isCID)
                 charset = parseCharset(Parser(parser.startPtr + topDict[15][0]), hb_face_get_glyph_count(font));
