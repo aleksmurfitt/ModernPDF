@@ -1,11 +1,11 @@
 #if !defined(MODERNPDF_CONFIG_H)
     #define MODERNPDF_CONFIG_H
     #include <filesystem>
-namespace PDFLib {
+namespace pdf_lib {
 namespace Config {
 static inline std::filesystem::path fonts{"@CMAKE_SOURCE_DIR@/fonts"};
 static inline std::filesystem::path output{"@CMAKE_SOURCE_DIR@/output"};
 } // namespace Config
-} // namespace PDFLib
+} // namespace pdf_lib
 
 #endif // MODERNPDF_CONFIG_H

@@ -9,13 +9,17 @@
     #include <hb-ot.h>
     #include <hb.h>
 
+    #include "fmt/format.h"
+
     #include <array>
+    #include <vector>
     #include <climits>
+    #include <numeric>
+    #include <charconv>
     #include <filesystem>
     #include <functional>
-    #include <vector>
 
-namespace PDFLib {
+namespace pdf_lib {
 class FontManager;
 class Document;
 
@@ -32,7 +36,7 @@ class Font {
 
     class CFFTable {
         FontTableParser parser;
-        static constexpr uint32_t Tag = Util::tag<"CFF ">;
+        static constexpr uint32_t Tag = util::tag<"CFF ">;
         /**
          * @brief Skips the index table
          */
@@ -161,7 +165,7 @@ class Font {
         }
 
         // This is intentionally mostly unimplemented — we only care to see if the
-        // CID to GID mapping is 1-to-1, and if not to get the mapping.
+        // CID to GID mapping is 1-to-1, and if not to get the correct mapping.
       public:
         bool isCID = false;
         std::vector<uint16_t> charset;
@@ -183,7 +187,7 @@ class Font {
         };
     };
     class HeadTable {
-        static constexpr uint32_t Tag = Util::tag<"head">;
+        static constexpr uint32_t Tag = util::tag<"head">;
         FontTableParser parser;
 
       public:
@@ -206,14 +210,14 @@ class Font {
         int16_t indexToLocFormat{parser.getNext<int16_t>()};
         int16_t glyphDataFormat{parser.getNext<int16_t>()};
 
-        HeadTable(HbFontT *font) : parser{font, Tag} {};
-
+        explicit HeadTable(HbFontT *font) : parser{font, Tag} {};
     } headTable;
     class OS2Table {
-        static constexpr uint32_t Tag = Util::tag<"OS/2">;
+        static constexpr uint32_t Tag = util::tag<"OS/2">;
         FontTableParser parser;
 
       public:
+        // Mostly made available for future use
         uint16_t version{parser.getNext()};
         int16_t xAvgCharWidth{parser.getNext<int16_t>()};
         uint16_t usWeightClass{parser.getNext()};
@@ -267,7 +271,7 @@ class Font {
 
     } os2Table;
     class PostTable {
-        static constexpr uint32_t Tag = Util::tag<"post">;
+        static constexpr uint32_t Tag = util::tag<"post">;
         FontTableParser parser;
 
       public:
@@ -278,7 +282,6 @@ class Font {
         uint32_t isFixedPitch{parser.getNext<uint32_t>()};
         // We don't care about the rest
         PostTable(HbFontT *font) : parser{font, Tag} {};
-
     } postTable;
 
     std::optional<CFFTable> cffTable = std::nullopt;
@@ -348,24 +351,23 @@ class Font {
         }
         return fontPostscriptName;
     }
+    // Converts each 'run' of GIDs
+    std::string runs_to_string(const std::vector<std::pair<std::vector<uint32_t>, int32_t>>& runs) {
+        size_t length = std::reduce(runs.begin(), runs.end(), 0, [](size_t a, auto& b){
+            return a + b.first.size() * 4;
+        }) + runs.size() * 5 + 2;
+        std::string out;
+        out.reserve(length);
+        out.push_back('[');
+        for (auto&&[gids, kerning] : runs) {
+            out.push_back('<');
+            for (auto &gid : gids)
+                fmt::format_to(std::back_inserter(out), "{:04x}", (CFF && cffTable->isCID) ? cffTable->charset[gid] : gid);
 
-    std::string runToString(std::vector<std::pair<std::vector<uint32_t>, int32_t>> run) {
-        auto toHex = [](uint32_t w, size_t hex_len = 4) -> std::string {
-            static const char *digits = "0123456789ABCDEF";
-            std::string rc(hex_len, '0');
-            for (size_t i = 0, j = (hex_len - 1) * 4; i < hex_len; ++i, j -= 4)
-                rc[i] = digits[(w >> j) & 0x0f];
-            return rc;
-        };
-        std::string out{"["};
-        for (auto &pair : run) {
-            out += '<';
-            for (auto &gid : pair.first)
-                out += toHex(CFF && cffTable->isCID ? cffTable->charset[gid] : gid);
-            out += '>';
-            out += std::to_string(pair.second);
+            out.push_back('>');
+            fmt::format_to(std::back_inserter(out), "{}", kerning);
         }
-        out += ']';
+        out.push_back(']');
         return out;
     }
 
@@ -405,6 +407,6 @@ class Font {
         return faces;
     }
 };
-} // namespace PDFLib
+} // namespace pdf_lib
 
 #endif // PDFLIB_FONT_H

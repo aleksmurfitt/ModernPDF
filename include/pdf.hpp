@@ -1,7 +1,8 @@
 #if !defined(PDFLIB_DOCUMENT_H)
     #define PDFLIB_DOCUMENT_H
-    #include "doc_config.hpp"
     #include "fontManager.hpp"
+    #include "page_descriptor.hpp"
+    #include "resource_manager.hpp"
 
     #include <qpdf/QPDF.hh>
     #include <qpdf/QPDFPageDocumentHelper.hh>
@@ -12,18 +13,18 @@
     #include <iostream>
     #include <set>
     #include <thread>
-
-namespace PDFLib {
+    #include "page_descriptor.hpp"
+namespace pdf_lib {
 class Document {
     QPDF pdf;
+    page_descriptor default_config;
+    std::vector<resource_manager*> resource_managers;
     QPDFPageDocumentHelper pages;
-    QPDFObjectHandle resources;
-    FontManager fontManager;
-
     class Page {
-        std::string contents = "";
+        std::string contents;
         QPDFObjectHandle pageDict;
         Document &doc;
+        page_descriptor config;
 
       public:
         Page(Document &doc) : doc{doc}, pageDict{doc.newIndirectObject(QPDFObjectHandle::newDictionary())} {
@@ -39,14 +40,19 @@ class Document {
     };
 
   public:
-    Document() : pages{(pdf.emptyPDF(), pdf)}, resources{QPDFObjectHandle::newDictionary()}, fontManager{*this} {};
 
-    void finish() {
-        fontManager.embedFonts(true);
-        resources.replaceKey("/Font", fontManager.getDictionary());
+    QPDFObjectHandle resources;
+    Document() : pages{(pdf.emptyPDF(), pdf)}, resources{QPDFObjectHandle::newDictionary()}{};
+    template <std::derived_from<resource_manager> T>
+    auto create_resource_manager(auto&&...args){
+
     }
-
+    void register_resource_manager(resource_manager& resourceManager){
+        resource_managers.push_back(&resourceManager);
+    }
     void write(std::filesystem::path path) {
+        for(auto* res : resource_managers)
+            res->embed(*this);
         QPDFWriter w(pdf, path.c_str());
         w.setCompressStreams(false);
         w.setPreserveUnreferencedObjects(false);
@@ -63,13 +69,9 @@ class Document {
         return QPDFObjectHandle::newStream(&pdf);
     }
 
-    FontManager &getFontManager() {
-        return fontManager;
-    }
-
     Page createPage() {
         return Page(*this);
     };
 };
-} // namespace PDFLib
+} // namespace pdf_lib
 #endif // PDFLIB_DOCUMENT_H

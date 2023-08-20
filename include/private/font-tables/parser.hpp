@@ -7,13 +7,13 @@
 
     #include <span>
 
-namespace PDFLib {
+namespace pdf_lib {
 // A stateful helper class
 template <typename T> struct BasicParser {
     size_t offset = 0;
     /**
-     * @brief Get the next `sizeof(Type)` bytes as a `Type`
-     * @tparam Type The integral type the data should be parsed as
+     * @brief Returns the next `sizeof(Type)` bytes, interpreted as a `Type`
+     * @tparam Type An integral type the data should be interpreted as
      * @return The parsed bytes as a `Type` object
      */
     template <std::integral Type = uint16_t> Type getNext() {
@@ -72,6 +72,6 @@ class FontTableParser : public BasicParser<FontTableParser> {
     const uint8_t *startPtr;
     FontTableParser(HbFontT *ptr, uint32_t tag) : tableBlob{ptr, tag}, startPtr{getTableRef()} {};
 };
-} // namespace PDFLib
+} // namespace pdf_lib
 
 #endif // PDFLIB_PRIVATE_FONT_TABLES_PARSER_H

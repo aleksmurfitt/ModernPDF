@@ -1,19 +1,19 @@
 #if !defined(PDFLIB_PRIVATE_TYPES_FONT)
 #    define PDFLIB_PRIVATE_TYPES_FONT
 #    include <qpdf/QPDFObjectHandle.hh>
-#    include <stdint.h>
+#    include <cstdint>
 
 #    include <string>
 #    include <type_traits>
 
-namespace PDFLib {
+namespace pdf_lib {
 struct BBox {
-    int16_t xMin;
-    int16_t yMin;
-    int16_t xMax;
-    int16_t yMax;
+    std::int16_t xMin;
+    std::int16_t yMin;
+    std::int16_t xMax;
+    std::int16_t yMax;
 
-    operator QPDFObjectHandle() {
+    operator QPDFObjectHandle() const {
         return QPDFObjectHandle::newArray(QPDFObjectHandle::Rectangle(xMin, yMin, xMax, yMax));
     };
 
@@ -35,5 +35,5 @@ struct BBox {
         return out;
     };
 };
-} // namespace PDFLib
+} // namespace pdf_lib
 #endif // PDFLIB_PRIVATE_TYPES_FONT

@@ -7,12 +7,12 @@
 #include <string_view>
 #include <ranges>
 
-namespace PDFLib{
+namespace pdf_lib {
 class iso_script_tag {
-    // Filthy hack to read the file at compile time - will be replaced with std::embed soon
     static inline constexpr auto data = [] () constexpr{
       namespace sr = std::ranges;
       namespace sv = std::views;
+      // Filthy hack to read the file at compile time - will be replaced with std::embed soon
       constexpr std::string_view data {
 #include "iso15924.txt"
       };
@@ -29,24 +29,33 @@ class iso_script_tag {
       sr::sort(pairs, [](auto& p1, auto& p2){return p1.first < p2.first;});
       return pairs;
     }();
-    static constexpr char lower(char c){
+    static constexpr char lower (char c){
         if(c >= 'A' && c <= 'Z')
             return 'a' + (c - 'A');
         return c;
+    };
+    static constexpr bool case_insensitive_compare(std::string_view l, std::string_view r){
+        return std::ranges::lexicographical_compare(l, r, [&](char f, char s){
+            return lower(f) < lower(s);
+        });
     }
   public:
     std::string_view iso_tag;
+    // This is implicit by design - the conversion should be invisible to the user
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "google-explicit-constructor"
     consteval iso_script_tag(std::string_view script_name){
-        auto result = std::ranges::lower_bound(data, script_name, [](auto l, auto r){
-            return std::ranges::lexicographical_compare(l, r, [](char f, char s){
-                return lower(f) < lower(s);
-            });
+        namespace sv = std::views;
+        namespace sr = std::ranges;
+        auto result = sr::lower_bound(data, script_name, [](auto l, auto r){
+            return case_insensitive_compare(l, r);
         }, [](auto&p){return p.first;});
-        if(result == data.end())
+        if(result == data.end() || sr::mismatch(result->first, script_name, {}, lower, lower).in2 != script_name.end())
             throw std::invalid_argument("Invalid script");
         iso_tag = result->second;
     }
     consteval iso_script_tag(const char * script_name) : iso_script_tag(std::string_view{script_name}){};
+#pragma clang diagnostic pop
 };
 }
 #endif // PDF_GENERATOR_SCRIPT_LANGUAGE_HPP

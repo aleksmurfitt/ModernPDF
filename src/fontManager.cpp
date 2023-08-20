@@ -4,11 +4,10 @@
 
 #include <limits>
 #include <random>
-using namespace PDFLib;
+using namespace pdf_lib;
 
-FontManager::FontManager(Document &document)
-    : document{document},
-      dictionary{document.newIndirectObject(QPDFObjectHandle::newDictionary())} {};
+FontManager::FontManager(bool subset_fonts)
+    : subset{subset_fonts}, dictionary{QPDFObjectHandle::newDictionary()} {};
 
 std::vector<QPDFObjectHandle> glyphAdvances(Face &face, Font &font, bool subset) {
     std::vector<QPDFObjectHandle> glyphAdvances{};
@@ -51,11 +50,11 @@ std::vector<QPDFObjectHandle> glyphAdvances(Face &face, Font &font, bool subset)
     return glyphAdvances;
 };
 // We embed fonts at the end
-void FontManager::embedFonts(bool subset) {
+void FontManager::embed(Document& document) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution distrib(static_cast<short>('A'), static_cast<short>('Z'));
-
+    document.newIndirectObject(dictionary);
     for (auto &&[key, font] : fonts) {
         auto &faces = font.getFaces();
         for (auto &&face : faces) {
@@ -70,7 +69,7 @@ void FontManager::embedFonts(bool subset) {
             if (subset) {
                 for (size_t i = 1; i <= 6; ++i)
                     name[i] = static_cast<char>(distrib(gen));
-                name += "Identity-H";
+                name += "Identity-H"; // TODO: Implement other ROSes
             }
 
             fontDescriptor.replaceKey("/Type", QPDFObjectHandle::newName("/FontDescriptor"));
@@ -119,6 +118,7 @@ void FontManager::embedFonts(bool subset) {
             fontDescriptor.replaceKey("/FontFile3", stream);
         }
     }
+    document.resources.replaceKey("/Font", dictionary);
 }
 
 // TODO: Add support for vertical writing

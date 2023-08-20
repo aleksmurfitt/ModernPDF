@@ -2,11 +2,10 @@
 #include "font.hpp"
 
 #include "fontManager.hpp"
-#include "pdf.hpp"
 
 #include <fstream>
 
-PDFLib::Font::Font(HbFontT *fontHandle, size_t index)
+pdf_lib::Font::Font(HbFontT *fontHandle, size_t index)
     : font{fontHandle},
       blob{hb_face_reference_blob(font)},
       headTable{font},
@@ -15,7 +14,7 @@ PDFLib::Font::Font(HbFontT *fontHandle, size_t index)
       postTable{font},
       scale{1000.0 / static_cast<double>(headTable.unitsPerEM)} {
     {
-        std::array<uint32_t, 10> tags;
+        std::array<uint32_t, 10> tags{};
         uint32_t length = 10;
         uint32_t total = 0;
         while (length > 0) {
@@ -23,7 +22,7 @@ PDFLib::Font::Font(HbFontT *fontHandle, size_t index)
             total += length;
             if (length > 0)
                 for (auto tag : tags) {
-                    if (tag == Util::tag<"CFF ">)
+                    if (tag == util::tag<"CFF ">)
                         CFF = true;
                 }
         }
@@ -32,11 +31,11 @@ PDFLib::Font::Font(HbFontT *fontHandle, size_t index)
         cffTable.emplace(font);
 };
 
-PDFLib::Face &PDFLib::Font::makeFace() {
+pdf_lib::Face &pdf_lib::Font::makeFace() {
     return faces.emplace_back(
         hb_font_create(font), scale, "/F" + std::to_string(index) + "v" + std::to_string(faces.size()));
 }
-std::function<void(Pipeline *)> PDFLib::Font::makeSubsetFunction(Face &face, bool subset) {
+std::function<void(Pipeline *)> pdf_lib::Font::makeSubsetFunction(Face &face, bool subset) {
     return [&face, this, subset](Pipeline *pipeline) mutable {
         unsigned int length;
         if (subset) {

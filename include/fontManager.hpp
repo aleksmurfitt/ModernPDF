@@ -14,41 +14,32 @@
 #include <filesystem>
 #include <string_view>
 #include <vector>
-
-namespace PDFLib {
+#include "resource_manager.hpp"
+namespace pdf_lib {
 class Document;
 
 // The face <-> font swap is intentional to better reflect what the types represent
 
 // TODO Add variations on faces
-class FontManager {
+class FontManager : public resource_manager{
     // Should provide a getFontsDict method to get the
     std::map<std::string, Font> fonts;
-    Document &document;
     QPDFObjectHandle dictionary;
-
+    bool subset;
   public:
-    FontManager(Document &document);
+    explicit FontManager(bool subset_fonts = true);
 
     decltype(fonts) &getFonts() {
         return fonts;
     }
 
-    Font &getFromName(std::string fullName) {
-        return fonts.at(fullName);
-    }
-
-    Document &getDocument() {
-        return document;
-    }
-
-    QPDFObjectHandle &getDictionary() {
-        return dictionary;
+    Font &get_from_name(const std::string& full_name) {
+        return fonts.at(full_name);
     }
 
     std::vector<std::string> loadFontFile(std::filesystem::path file, uint32_t startIndex = 0,
                                           std::optional<uint32_t> maxFonts = std::nullopt);
-    void embedFonts(bool subset = true);
+    void embed(Document& document);
 };
-}; // namespace PDFLib
+}; // namespace pdf_lib
 #endif

@@ -8,7 +8,7 @@
 
 #include <iostream>
 #include <utility>
-using namespace PDFLib;
+using namespace pdf_lib;
 Face::Face(FaceHolder face, double scale, std::string handle)
     : glyphSet{subsetInput},
       charSet{},
@@ -50,9 +50,9 @@ std::pair<float, std::vector<std::pair<std::vector<uint32_t>, int32_t>>> Face::s
     BufferHolder buffer;
     hb_buffer_add_utf8(buffer, text.begin(), -1, 0, -1);
     hb_buffer_set_direction(buffer, direction);
-    hb_buffer_set_script(buffer, static_cast<hb_script_t>(Util::as_tag(script.iso_tag)));
-    hb_buffer_set_language(buffer, hb_language_from_string(language.begin(), -1));
-    hb_shape(face, buffer, NULL, 0);
+    hb_buffer_set_script(buffer, static_cast<hb_script_t>(util::as_tag(script.iso_tag)));
+    hb_buffer_set_language(buffer, hb_language_from_string(language.begin(), language.length()));
+    hb_shape(face, buffer, nullptr, 0);
 
     unsigned int glyph_count;
     hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buffer, &glyph_count);
@@ -70,10 +70,13 @@ std::pair<float, std::vector<std::pair<std::vector<uint32_t>, int32_t>>> Face::s
         hb_position_t error = hb_font_get_glyph_h_advance(face, glyphid) - x_advance;
         hb_set_add(glyphSet, glyphid);
         width += x_advance;
+        hb_glyph_flags_t flags = hb_glyph_info_get_glyph_flags(&glyph_info[i]);
+        std::cout << (flags & HB_GLYPH_FLAG_UNSAFE_TO_BREAK);
         runs.back().first.push_back(glyphid);
         if (error) {
             runs.back().second = ((int32_t)(error * scale));
-            runs.emplace_back();
+            if(i + 1 < glyph_count)
+                runs.emplace_back();
         }
     }
     return std::make_pair(width * scale * points / 1000.0, runs);

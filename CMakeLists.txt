@@ -8,7 +8,7 @@ project(PDF-Generator VERSION 1.0
                   LANGUAGES CXX)
 
 include(cmake/collect_dependencies.cmake)
-
+include(FetchContent)
 set(APK_PACKAGES
     pkgconfig
     harfbuzz)

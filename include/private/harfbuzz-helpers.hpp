@@ -6,7 +6,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
-namespace PDFLib {
+namespace pdf_lib {
 using HbFontT = hb_face_t;
 using HbFaceT = hb_font_t;
 using HbBlobT = hb_blob_t;
@@ -19,17 +19,17 @@ template <auto arg> inline constexpr bool is_nullarg_v = std::is_same_v<std::rem
 struct HarfbuzzError : public std::runtime_error {
     using std::runtime_error::runtime_error;
 };
-} // namespace PDFLib
+} // namespace pdf_lib
 namespace detail {
-using ::PDFLib::HarfbuzzError;
-inline constexpr auto bufferInit = [](std::filesystem::path fontFile) -> auto{
-    if (auto blob = hb_blob_create_from_file_or_fail(fontFile.c_str()); blob != NULL) {
+using ::pdf_lib::HarfbuzzError;
+inline constexpr auto bufferInit = [](const std::filesystem::path & fontFile) -> auto{
+    if (auto blob = hb_blob_create_from_file_or_fail(fontFile.c_str()); blob != nullptr) {
         return blob;
     }
     throw HarfbuzzError(std::string("Failed to load font file: ") + fontFile.stem().c_str());
 };
 } // namespace detail
-namespace PDFLib {
+namespace pdf_lib {
 template <typename T, auto deleter = nullarg, auto initialiser = nullarg> class PtrHolder {
     struct PtrDeleter {
         void operator()(T *ptr) {
@@ -67,6 +67,6 @@ using SetHolder = PtrHolder<HbSetT, hb_set_destroy, hb_set_create>;
 
 using SubsetInputHolder = PtrHolder<HbSubsetInputT, hb_subset_input_destroy, hb_subset_input_create_or_fail>;
 
-} // namespace PDFLib
+} // namespace pdf_lib
 
 #endif

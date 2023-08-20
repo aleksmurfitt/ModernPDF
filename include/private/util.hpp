@@ -2,8 +2,8 @@
     #define PDFLIB_UTIL_H
     #include <memory>
 
-namespace PDFLib {
-namespace Util {
+namespace pdf_lib::util {
+
 template <size_t N> struct sized_string_literal {
     consteval sized_string_literal(const char (&str)[N]) {
         std::copy_n(str, N, value);
@@ -22,7 +22,6 @@ constexpr unsigned int as_tag(std::string_view c){
 
 template <sized_string_literal c>
 constexpr unsigned int tag = as_tag(c.value);
-} // namespace Util
-} // namespace PDFLib
+} // namespace pdf_lib::util
 
 #endif // PDFLIB_UTIL_H
